@@ -1,0 +1,7 @@
+tunnel: TUNNEL_ID
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: n8n.tu-dominio.com
+    service: http://n8n:5678
+  - service: http_status:404

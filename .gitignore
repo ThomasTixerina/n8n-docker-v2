@@ -1,0 +1,31 @@
+# Variables de entorno
+.env
+docker/.env
+
+# Credenciales de Cloudflare
+cloudflare/credentials.json
+
+# Backups
+backups/
+*.tar.gz
+
+# Datos locales de n8n (si se monta localmente)
+.n8n/
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Archivos temporales
+tmp/
+temp/

@@ -1,0 +1,18 @@
+{
+  "executions": {
+    "saveDataOnSuccess": "all",
+    "saveDataOnError": "all",
+    "saveDataManualExecutions": true
+  },
+  "security": {
+    "basicAuth": {
+      "active": true
+    }
+  },
+  "endpoints": {
+    "rest": "rest",
+    "webhook": "webhook",
+    "webhookTest": "webhook-test"
+  },
+  "timezone": "America/New_York"
+}
