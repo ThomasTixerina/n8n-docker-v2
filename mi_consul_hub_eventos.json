@@ -1,0 +1,132 @@
+{
+  "name": "Mi Consul: Hub de Eventos (Central)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mi-consul-events",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook: Mi Consul PHP",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$json.event}}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "sale_created",
+              "operation": "equal"
+            },
+            {
+              "value2": "appointment_created",
+              "operation": "equal"
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "switch-node",
+      "name": "Tipo de Evento?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toRegister",
+        "workflow": "={{$node[\"Config\"].json.workflow_fidelizacion}}"
+      },
+      "id": "execute-fidelizacion",
+      "name": "Módulo Fidelización",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        680,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toRegister",
+        "workflow": "={{$node[\"Config\"].json.workflow_calendario}}"
+      },
+      "id": "execute-calendario",
+      "name": "Módulo Calendario",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        680,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "workflow_fidelizacion",
+              "value": "PONER_ID_AQUÍ"
+            },
+            {
+              "name": "workflow_calendario",
+              "value": "PONER_ID_AQUÍ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-node",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        460,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Mi Consul PHP": {
+      "main": [
+        [
+          {
+            "node": "Tipo de Evento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de Evento?": {
+      "main": [
+        [
+          {
+            "node": "Módulo Fidelización",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Módulo Calendario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

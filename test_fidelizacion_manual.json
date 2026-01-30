@@ -1,0 +1,51 @@
+{
+  "name": "TEST MANUAL: Fidelización",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "id": "manual-trigger",
+      "name": "Ejeutar Prueba"
+    },
+    {
+      "parameters": {
+        "fromEmail": "miconsul@dental.com",
+        "toEmail": "ttijerina@tuemail.com",
+        "subject": "🦷 Bienvenido a Mi Consul, Tomás - Tenemos un compromiso contigo",
+        "html": "<h2>¡Hola Tomás! Es un gusto saludarte.</h2><p>Queremos darte las gracias por elegirnos para cuidar de tu salud dental...</p><p>🎉 Tienes una <b>Limpieza de Regalo</b> en tu próxima visita.</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        460,
+        240
+      ],
+      "id": "send-test-email",
+      "name": "Email: Prueba Fidelización",
+      "credentials": {
+        "smtp": {
+          "id": "smtp-creds-id"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Ejeutar Prueba": {
+      "main": [
+        [
+          {
+            "node": "Email: Prueba Fidelización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

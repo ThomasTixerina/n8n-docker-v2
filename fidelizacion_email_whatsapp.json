@@ -1,0 +1,179 @@
+{
+  "name": "Fidelización: Email + WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mi-consul-events",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Evento de Venta",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event}}",
+              "operation": "equals",
+              "value2": "sale_created"
+            }
+          ]
+        }
+      },
+      "id": "filter-sales",
+      "name": "Es una Venta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT COUNT(*) as venta_count FROM miconsul_uno.ospos_sales WHERE customer_id = {{$json.data.customer_id}};"
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [680, 200],
+      "id": "check-first-sale",
+      "name": "Verificar Primera Venta",
+      "credentials": {
+        "mySql": {
+          "id": "1",
+          "name": "Mi Consul DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.venta_count}}",
+              "operation": "equal",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 200],
+      "id": "is-new-patient",
+      "name": "Es Paciente Nuevo?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT p.first_name, p.last_name, p.email, p.phone_number FROM miconsul_uno.ospos_people p WHERE p.person_id = {{$json.data.customer_id}};"
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [1120, 100],
+      "id": "get-customer-data",
+      "name": "Datos del Paciente",
+      "credentials": {
+        "mySql": {
+          "id": "1",
+          "name": "Mi Consul DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "miconsul@dental.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "=🦷 Bienvenido a Mi Consul, {{$json.first_name}}",
+        "html": "=<h2>¡Hola {{$json.first_name}}!</h2><p>Gracias por confiar en nosotros. En <b>Mi Consul</b> construimos sonrisas que duran toda la vida.</p><ul><li>🎁 <b>Limpieza de Regalo</b> en tu próxima visita</li><li>🛡️ <b>Garantía Doble:</b> Compra 5 años, ¡te regalamos 5 más!</li></ul><p>Nos vemos pronto,<br>El equipo de Mi Consul</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1340, 60],
+      "id": "send-email",
+      "name": "Enviar Email",
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Gmail SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$node[\"Config\"].json.whatsapp_api_url}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{$json.phone_number}}"
+            },
+            {
+              "name": "message",
+              "value": "=🦷 ¡Hola {{$json.first_name}}! Gracias por confiar en Mi Consul. Como bienvenida:\n\n🎁 Limpieza GRATIS en tu próxima visita\n🛡️ Garantía de 5 años + 5 años de regalo\n\n¡Nos vemos pronto!"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 180],
+      "id": "send-whatsapp",
+      "name": "Enviar WhatsApp",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "WhatsApp API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "whatsapp_api_url",
+              "value": "https://api.evolution-api.com/message/sendText/mi-consul-instance"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-node",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Evento de Venta": {
+      "main": [[{"node": "Es una Venta?", "type": "main", "index": 0}]]
+    },
+    "Es una Venta?": {
+      "main": [[{"node": "Verificar Primera Venta", "type": "main", "index": 0}]]
+    },
+    "Verificar Primera Venta": {
+      "main": [[{"node": "Es Paciente Nuevo?", "type": "main", "index": 0}]]
+    },
+    "Es Paciente Nuevo?": {
+      "main": [[{"node": "Datos del Paciente", "type": "main", "index": 0}]]
+    },
+    "Datos del Paciente": {
+      "main": [[
+        {"node": "Enviar Email", "type": "main", "index": 0},
+        {"node": "Enviar WhatsApp", "type": "main", "index": 0}
+      ]]
+    }
+  }
+}

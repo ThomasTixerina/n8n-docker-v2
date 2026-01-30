@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Project Root",
+    "pattern": "**/*",
+    "onMatch": "ignore"
+  },
+  {
+    "name": "N8N Management Skill",
+    "pattern": ".agent/skills/n8n-management/**/*",
+    "onMatch": "include"
+  },
+  {
+    "name": "Loopic Integration Skill",
+    "pattern": ".agent/skills/loopic-integration/**/*",
+    "onMatch": "include"
+  },
+  {
+    "name": "Antigravity Skill Creator",
+    "pattern": ".agent/skills/creating-antigravity-skills/**/*",
+    "onMatch": "include"
+  },
+  {
+    "name": "Brand Identity Skill",
+    "pattern": ".agent/skills/brand-identity/**/*",
+    "onMatch": "include"
+  }
+]

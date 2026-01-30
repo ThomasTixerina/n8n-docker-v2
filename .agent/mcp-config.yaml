@@ -1,0 +1,90 @@
+---
+# Configuración MCP para n8n
+# Este archivo configura el Model Context Protocol para trabajar con n8n
+
+version: "1.0"
+name: n8n-mcp-config
+description: Configuración MCP para proyectos n8n con integración continua
+
+# Configuración del servidor n8n
+server:
+  name: n8n-production
+  type: n8n
+  url: https://activated-arrangements-divine-power.trycloudflare.com/
+  webhook_base_url: ${WEBHOOK_URL}
+
+# Extensiones de archivos asociadas para n8n
+file_associations:
+  workflows:
+    - "*.json" # Archivos de workflow de n8n
+    - "*.workflow.json" # Workflows específicos
+
+  documentation:
+    - "*.md" # Documentación y guías
+    - "guia_*.md" # Guías específicas
+
+  configuration:
+    - "*.env" # Variables de entorno
+    - "*.yaml" # Configuraciones YAML
+    - "*.yml" # Configuraciones YML
+    - "docker-compose.yml"
+
+  scripts:
+    - "*.js" # Scripts de JavaScript
+    - "*.ts" # Scripts de TypeScript
+    - "test_*.js" # Scripts de prueba
+
+# Directorios del proyecto
+directories:
+  root: "c:\\Users\\Thomas Tixerina\\MCP\\n8n-infrastructure"
+  workflows: "c:\\Users\\Thomas Tixerina\\MCP\\n8n-infrastructure"
+  docs: "c:\\Users\\Thomas Tixerina\\MCP\\n8n-infrastructure"
+
+# Variables de entorno persistentes
+environment:
+  N8N_MCP_TOKEN: "${N8N_MCP_TOKEN}"
+  WEBHOOK_URL: "${WEBHOOK_URL}"
+  GITHUB_TOKEN: "${GITHUB_TOKEN}"
+  N8N_HOST: "activated-arrangements-divine-power.trycloudflare.com"
+  N8N_PROTOCOL: "https"
+  N8N_PORT: "5678"
+
+# Configuración de integración continua
+ci_cd:
+  auto_publish: true
+  github_integration: true
+  webhook_validation: true
+
+# Herramientas disponibles
+tools:
+  - name: workflow_validator
+    description: Valida workflows de n8n antes de publicar
+    enabled: true
+
+  - name: webhook_tester
+    description: Prueba webhooks automáticamente
+    enabled: true
+
+  - name: github_sync
+    description: Sincroniza workflows con GitHub
+    enabled: true
+
+# Configuración de monitoreo
+monitoring:
+  health_check_interval: 60 # segundos
+  log_level: "info"
+  persistent_logs: true
+
+# Configuración de publicación
+publishing:
+  auto_deploy: true
+  backup_before_deploy: true
+  rollback_on_error: true
+
+# Notas importantes
+notes: |
+  Esta configuración está optimizada para un servidor que permanece encendido 24/7.
+  - El servidor n8n está siempre disponible en la URL configurada
+  - Los webhooks están configurados para recibir eventos en tiempo real
+  - La integración con GitHub permite versionado automático de workflows
+  - Cloudflare Tunnel proporciona acceso público seguro sin abrir puertos

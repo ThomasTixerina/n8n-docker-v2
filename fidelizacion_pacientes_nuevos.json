@@ -1,0 +1,160 @@
+{
+  "name": "Fidelización: Pacientes Nuevos (Deep Persuasion)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "tableName": "ospos_sales",
+        "select": "all",
+        "whereClause": "1=1",
+        "order": "sale_id DESC"
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [
+        380,
+        240
+      ],
+      "id": "trigger-sales",
+      "name": "Trigger: Nueva Venta",
+      "credentials": {
+        "mySql": {
+          "id": "mysql-creds-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT COUNT(*) as venta_count \nFROM miconsul_uno.ospos_sales \nWHERE customer_id = {{$json.customer_id}};"
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [
+        600,
+        240
+      ],
+      "id": "check-first-time",
+      "name": "Es su primera vez?",
+      "credentials": {
+        "mySql": {
+          "id": "mysql-creds-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.venta_count}}",
+              "operation": "equal",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        820,
+        240
+      ],
+      "id": "filter-new-patient",
+      "name": "Filtrar: Nuevo Paciente"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT p.first_name, p.last_name, p.email, p.phone_number \nFROM miconsul_uno.ospos_people p \nWHERE p.person_id = {{$parentNodes[\"Trigger: Nueva Venta\"].json.customer_id}};"
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        140
+      ],
+      "id": "get-patient-data",
+      "name": "Datos del Paciente",
+      "credentials": {
+        "mySql": {
+          "id": "mysql-creds-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "miconsul@dental.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "=🦷 Bienvenido a Mi Consul, {{$json.first_name}} - Tenemos un compromiso contigo",
+        "html": "=<h2>¡Hola {{$json.first_name}}! Es un gusto saludarte.</h2>\n<p>Queremos darte las gracias por elegirnos para cuidar de tu salud dental. En <b>Mi Consul</b> no solo hacemos clínicas, construimos sonrisas que duran toda la vida.</p>\n<p>Porque estamos tan seguros de la calidad de nuestro trabajo, queremos hacerte un compromiso hoy mismo:</p>\n<ul>\n  <li>🎁 <b>Limpieza de Regalo:</b> En tu próxima visita, la limpieza corre por nuestra cuenta.</li>\n  <li>🛡️ <b>Doblamos tu Garantía:</b> Si adquieres nuestra garantía de 5 años, ¡te regalamos 5 años extra! Gratis. 10 años de tranquilidad absoluta.</li>\n</ul>\n<p>Nuestro compromiso es implícito: si confías en nosotros, nosotros cuidamos de ti como si fueras de la familia.</p>\n<p>¡Nos vemos en tu siguiente cita!</p>\n<br>\n<p>Atentamente,<br>El equipo de <b>Mi Consul</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        140
+      ],
+      "id": "send-welcome-email",
+      "name": "Email: Fidelización",
+      "credentials": {
+        "smtp": {
+          "id": "smtp-creds-id"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Trigger: Nueva Venta": {
+      "main": [
+        [
+          {
+            "node": "Es su primera vez?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Es su primera vez?": {
+      "main": [
+        [
+          {
+            "node": "Filtrar: Nuevo Paciente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar: Nuevo Paciente": {
+      "main": [
+        [
+          {
+            "node": "Datos del Paciente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos del Paciente": {
+      "main": [
+        [
+          {
+            "node": "Email: Fidelización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

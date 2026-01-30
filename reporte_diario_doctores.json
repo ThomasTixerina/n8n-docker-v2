@@ -1,0 +1,114 @@
+{
+  "name": "Reporte Diario para Doctores (8 PM)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        240
+      ],
+      "id": "e3a1f1a2-b9b1-46d2-a7d1-e9c5f2d4e8a1",
+      "name": "Cron 8 PM"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    e.first_name AS doctor_nombre, \n    e.email AS doctor_email,\n    v.start_date AS cita_hora,\n    c.first_name AS paciente_nombre,\n    c.last_name AS paciente_apellido\nFROM miconsul_uno.tevents v\nJOIN miconsul_uno.ospos_people e ON v.doctor_id = e.person_id\nJOIN miconsul_uno.ospos_people c ON v.patient_id = c.person_id\nWHERE DATE(v.start_date) = CURDATE() + INTERVAL 1 DAY\nORDER BY doctor_email, cita_hora ASC;"
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [
+        600,
+        240
+      ],
+      "id": "f4b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "SQL: Citas Mañana",
+      "credentials": {
+        "mySql": {
+          "id": "mysql-creds-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "miconsul@tunegocio.com",
+        "toEmail": "={{$json.doctor_email}}",
+        "subject": "=Resumen de Citas para Mañana - {{$now.plus({ days: 1 }).format('dd/MM/yyyy')}}",
+        "html": "=<h2>Hola, Dr. {{$json.doctor_nombre}}</h2>\n<p>Este es tu resumen de citas para mañana:</p>\n<ul>\n    {{$json.citas_lista}}\n</ul>\n<p>¡Que tengas un excelente día!</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        240
+      ],
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5e",
+      "name": "Enviar Email",
+      "credentials": {
+        "smtp": {
+          "id": "smtp-creds-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const doctors = {};\n\nfor (const item of items) {\n    const email = item.json.doctor_email;\n    if (!doctors[email]) {\n        doctors[email] = {\n            doctor_nombre: item.json.doctor_nombre,\n            doctor_email: email,\n            citas: []\n        };\n    }\n    doctors[email].citas.push(`<li><b>${item.json.cita_hora.split(' ')[1]}</b>: ${item.json.paciente_nombre} ${item.json.paciente_apellido}</li>`);\n}\n\nreturn Object.values(doctors).map(d => ({\n    json: {\n        ...d,\n        citas_lista: d.citas.join('')\n    }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        240
+      ],
+      "id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "name": "Agrupar por Doctor"
+    }
+  ],
+  "connections": {
+    "Cron 8 PM": {
+      "main": [
+        [
+          {
+            "node": "SQL: Citas Mañana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL: Citas Mañana": {
+      "main": [
+        [
+          {
+            "node": "Agrupar por Doctor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar por Doctor": {
+      "main": [
+        [
+          {
+            "node": "Enviar Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

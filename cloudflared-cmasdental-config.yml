@@ -1,0 +1,7 @@
+tunnel: 52608b83-8304-4ed6-a952-4316389c67d9
+credentials-file: /etc/cloudflared/52608b83-8304-4ed6-a952-4316389c67d9.json
+
+ingress:
+  - hostname: whatsapp.cmas-dental.com
+    service: http://n8n-cmasdental:5678
+  - service: http_status:404

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.js.map
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files (keep templates)
+.env
+!.env.example
+!.env.template
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Cache
+.npm/
+.eslintcache
+.cache/
+
+# Testing
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Docker volumes (ignore large data)
+volumes/
+
+# Package lock (keeping it for reproducible builds)
+# package-lock.json

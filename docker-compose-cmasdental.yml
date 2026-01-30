@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # n8n for CmasDental
+  n8n-cmasdental:
+    image: n8nio/n8n:latest
+    container_name: n8n-cmasdental
+    ports:
+      - "5681:5678"
+    environment:
+      - N8N_HOST=whatsapp.cmas-dental.com
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://whatsapp.cmas-dental.com
+      - N8N_EDITOR_BASE_URL=https://whatsapp.cmas-dental.com/
+    volumes:
+      - n8n_cmasdental_data:/home/node/.n8n
+    restart: always
+    networks:
+      - cmasdental_network
+
+  # PostgreSQL for CmasDental
+  postgres-cmasdental:
+    image: postgres:15-alpine
+    container_name: postgres-cmasdental
+    environment:
+      - POSTGRES_DB=n8n_cmasdental
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=n8n_cmasdental_2026
+    volumes:
+      - postgres_cmasdental_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - cmasdental_network
+
+  # Cloudflare Tunnel with permanent URL
+  cloudflared-cmasdental:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-cmasdental
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared-cmasdental-config.yml:/etc/cloudflared/config.yml:ro
+      - ./52608b83-8304-4ed6-a952-4316389c67d9.json:/etc/cloudflared/52608b83-8304-4ed6-a952-4316389c67d9.json:ro
+    restart: always
+    networks:
+      - cmasdental_network
+    depends_on:
+      - n8n-cmasdental
+
+  # Redis for CmasDental (shared memory)
+  redis-cmasdental:
+    image: redis:7-alpine
+    container_name: redis-cmasdental
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_cmasdental_data:/data
+    command: redis-server --appendonly yes
+    restart: always
+    networks:
+      - cmasdental_network
+
+volumes:
+  n8n_cmasdental_data:
+    driver: local
+  postgres_cmasdental_data:
+    driver: local
+  redis_cmasdental_data:
+    driver: local
+
+networks:
+  cmasdental_network:
+    driver: bridge
