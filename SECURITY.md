@@ -246,13 +246,9 @@ Si sospechas que tu instalación fue comprometida:
 - [n8n Security Documentation](https://docs.n8n.io/hosting/security/)
 - [Cloudflare Security](https://www.cloudflare.com/learning/security/)
 
-## 🔄 Actualizaciones de Seguridad
+## 📞 Soporte
 
-Este documento se actualiza regularmente. Última actualización: [Fecha]
-
-Revisa este documento periódicamente para nuevas recomendaciones de seguridad.
-
-## 📞 Contacto
+Este documento se actualiza regularmente con nuevas recomendaciones de seguridad.
 
 Para reportes de seguridad, contacta a los mantenedores del proyecto.
 

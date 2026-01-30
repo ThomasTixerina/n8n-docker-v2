@@ -29,9 +29,13 @@ if ! docker info > /dev/null 2>&1; then
 fi
 echo -e "${GREEN}OK${NC}"
 
-# Verificar que Docker Compose esté disponible
+# Verificar Docker Compose (try v2 first, fall back to v1)
 echo -n "2. Verificando Docker Compose... "
-if ! docker-compose version > /dev/null 2>&1; then
+if docker compose version > /dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+elif docker-compose version > /dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+else
     echo -e "${RED}FAIL${NC}"
     echo "   Docker Compose no está instalado"
     exit 1
@@ -80,9 +84,9 @@ echo "5. Estado de Contenedores:"
 echo "----------------------------------------"
 
 # Obtener estado de contenedores
-POSTGRES_STATUS=$(docker-compose ps -q postgres 2>/dev/null)
-N8N_STATUS=$(docker-compose ps -q n8n 2>/dev/null)
-CLOUDFLARED_STATUS=$(docker-compose ps -q cloudflared 2>/dev/null)
+POSTGRES_STATUS=$($COMPOSE_CMD ps -q postgres 2>/dev/null)
+N8N_STATUS=$($COMPOSE_CMD ps -q n8n 2>/dev/null)
+CLOUDFLARED_STATUS=$($COMPOSE_CMD ps -q cloudflared 2>/dev/null)
 
 if [ -z "$POSTGRES_STATUS" ] && [ -z "$N8N_STATUS" ] && [ -z "$CLOUDFLARED_STATUS" ]; then
     echo -e "   ${YELLOW}No hay contenedores corriendo${NC}"
@@ -138,7 +142,7 @@ fi
 echo ""
 echo -n "6. Verificando conectividad de base de datos... "
 if [ -n "$POSTGRES_STATUS" ]; then
-    if docker-compose exec -T postgres pg_isready -U n8n_user > /dev/null 2>&1; then
+    if $COMPOSE_CMD exec -T postgres pg_isready -U n8n_user > /dev/null 2>&1; then
         echo -e "${GREEN}OK${NC}"
     else
         echo -e "${RED}FAIL${NC}"
@@ -167,12 +171,12 @@ fi
 echo ""
 echo "9. Errores Recientes en Logs (últimas 50 líneas):"
 echo "----------------------------------------"
-ERROR_COUNT=$(docker-compose logs --tail=50 2>/dev/null | grep -i -E "error|fail|exception" | wc -l)
+ERROR_COUNT=$($COMPOSE_CMD logs --tail=50 2>/dev/null | grep -i -E "error|fail|exception" | wc -l)
 if [ "$ERROR_COUNT" -eq 0 ]; then
     echo -e "   ${GREEN}No se encontraron errores${NC}"
 else
     echo -e "   ${YELLOW}Se encontraron $ERROR_COUNT líneas con errores${NC}"
-    echo "   Ejecuta 'docker-compose logs -f' para ver detalles"
+    echo "   Ejecuta '$COMPOSE_CMD logs -f' para ver detalles"
 fi
 
 echo ""

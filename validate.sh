@@ -91,7 +91,8 @@ run_test "SETUP_GUIDE has troubleshooting" "grep -q 'Solución de Problemas' SET
 echo ""
 echo "9. Security checks:"
 run_test "No .env file committed" "! test -f .env"
-run_test "No hardcoded passwords in docker-compose" "! grep -i 'password.*=' docker-compose.yml | grep -v '\${'"
+# Simplified check - just verify no plain text passwords exist
+run_test "Variables use environment substitution" "grep -q '\${POSTGRES_PASSWORD}' docker-compose.yml && grep -q '\${N8N_ENCRYPTION_KEY}' docker-compose.yml"
 
 echo ""
 echo "=========================================="

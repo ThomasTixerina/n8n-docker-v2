@@ -14,6 +14,13 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Detectar Docker Compose command
+if docker compose version > /dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+else
+    COMPOSE_CMD="$COMPOSE_CMD"
+fi
+
 # Verificar argumentos
 if [ $# -eq 0 ]; then
     echo -e "${RED}Error: No se especificó archivo de backup${NC}"
@@ -85,7 +92,7 @@ fi
 # 1. Detener contenedores
 echo ""
 echo "1. Deteniendo contenedores..."
-docker-compose down
+$COMPOSE_CMD down
 echo -e "   ${GREEN}✓ Contenedores detenidos${NC}"
 
 # 2. Restaurar base de datos
@@ -93,24 +100,24 @@ echo ""
 echo "2. Restaurando base de datos..."
 
 # Iniciar solo PostgreSQL
-docker-compose up -d postgres
+$COMPOSE_CMD up -d postgres
 
 # Esperar a que PostgreSQL esté listo
 echo "   Esperando a que PostgreSQL esté listo..."
 sleep 10
 
 # Verificar si la base de datos existe y eliminarla
-docker-compose exec -T postgres psql -U n8n_user -d postgres -c "DROP DATABASE IF EXISTS n8n_db;" 2>/dev/null || true
-docker-compose exec -T postgres psql -U n8n_user -d postgres -c "CREATE DATABASE n8n_db;" 2>/dev/null
+$COMPOSE_CMD exec -T postgres psql -U n8n_user -d postgres -c "DROP DATABASE IF EXISTS n8n_db;" 2>/dev/null || true
+$COMPOSE_CMD exec -T postgres psql -U n8n_user -d postgres -c "CREATE DATABASE n8n_db;" 2>/dev/null
 
 # Restaurar el dump
-cat "$BACKUP_DIR/database.sql" | docker-compose exec -T postgres psql -U n8n_user -d n8n_db
+cat "$BACKUP_DIR/database.sql" | $COMPOSE_CMD exec -T postgres psql -U n8n_user -d n8n_db
 
 if [ $? -eq 0 ]; then
     echo -e "   ${GREEN}✓ Base de datos restaurada${NC}"
 else
     echo -e "   ${RED}✗ Error al restaurar base de datos${NC}"
-    docker-compose down
+    $COMPOSE_CMD down
     rm -rf "$TEMP_DIR"
     exit 1
 fi
@@ -135,7 +142,7 @@ if [ $? -eq 0 ]; then
     echo -e "   ${GREEN}✓ Datos de n8n restaurados${NC}"
 else
     echo -e "   ${RED}✗ Error al restaurar datos de n8n${NC}"
-    docker-compose down
+    $COMPOSE_CMD down
     rm -rf "$TEMP_DIR"
     exit 1
 fi
@@ -155,7 +162,7 @@ fi
 # 5. Iniciar todos los servicios
 echo ""
 echo "5. Iniciando todos los servicios..."
-docker-compose up -d
+$COMPOSE_CMD up -d
 
 echo ""
 echo "Esperando a que los servicios estén listos..."
@@ -163,7 +170,7 @@ sleep 15
 
 # Verificar estado
 echo ""
-docker-compose ps
+$COMPOSE_CMD ps
 
 # Limpiar directorio temporal
 rm -rf "$TEMP_DIR"

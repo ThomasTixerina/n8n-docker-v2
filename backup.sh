@@ -16,6 +16,13 @@ BACKUP_DIR="./backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="n8n_backup_${DATE}"
 
+# Detectar Docker Compose command
+if docker compose version > /dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+else
+    COMPOSE_CMD="$COMPOSE_CMD"
+fi
+
 # Colores
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -35,9 +42,9 @@ fi
 
 # Verificar que los contenedores estén corriendo
 echo "Verificando contenedores..."
-if ! docker-compose ps | grep -q "n8n.*Up"; then
+if ! $COMPOSE_CMD ps | grep -q "n8n.*Up"; then
     echo -e "${RED}Error: Los contenedores no están corriendo${NC}"
-    echo "Ejecuta: docker-compose up -d"
+    echo "Ejecuta: $COMPOSE_CMD up -d"
     exit 1
 fi
 
@@ -50,7 +57,7 @@ mkdir -p "$BACKUP_PATH"
 
 # 1. Backup de la base de datos
 echo "1. Creando backup de PostgreSQL..."
-docker-compose exec -T postgres pg_dump -U n8n_user n8n_db > "${BACKUP_PATH}/database.sql"
+$COMPOSE_CMD exec -T postgres pg_dump -U n8n_user n8n_db > "${BACKUP_PATH}/database.sql"
 if [ $? -eq 0 ]; then
     echo -e "   ${GREEN}✓ Backup de base de datos completado${NC}"
     echo "   Tamaño: $(du -h "${BACKUP_PATH}/database.sql" | cut -f1)"
@@ -97,8 +104,8 @@ Hostname: $(hostname)
 Usuario: $(whoami)
 
 Versiones:
-- n8n: $(docker-compose exec -T n8n n8n --version 2>/dev/null | tr -d '\r' || echo "No disponible")
-- PostgreSQL: $(docker-compose exec -T postgres psql --version 2>/dev/null | tr -d '\r' || echo "No disponible")
+- n8n: $($COMPOSE_CMD exec -T n8n n8n --version 2>/dev/null | tr -d '\r' || echo "No disponible")
+- PostgreSQL: $($COMPOSE_CMD exec -T postgres psql --version 2>/dev/null | tr -d '\r' || echo "No disponible")
 
 Archivos incluidos:
 - database.sql (Base de datos PostgreSQL)
