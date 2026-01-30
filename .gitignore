@@ -1,0 +1,37 @@
+# Environment variables
+.env
+
+# n8n data directory
+n8n_data/
+
+# Cloudflare credentials
+*.pem
+*.cert
+cloudflared/
+
+# Docker volumes
+volumes/
+
+# Logs
+*.log
+logs/
+
+# Backup files
+backups/
+*.backup
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
