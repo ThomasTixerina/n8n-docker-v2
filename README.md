@@ -1,6 +1,6 @@
 # n8n-docker-v2
 
-Este repositorio es para tener n8n instalado con workflows de su MCP (Model Context Protocol), instalado con contenedor en Docker, usando un puerto de salida seguro con Cloudflare, para poder trabajar con desarrollos propios.
+Este repositorio es para tener n8n instalado con workflows de su MCP (Model Context Protocol), instalado con contenedor en Docker, usando un túnel seguro con Cloudflare, para poder trabajar con desarrollos propios.
 
 ## 📋 Descripción
 

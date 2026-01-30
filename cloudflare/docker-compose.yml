@@ -18,4 +18,5 @@ services:
 
 networks:
   n8n_network:
-    external: true
+    external: false
+    name: n8n_network

@@ -1,7 +1,7 @@
 # Configuración de Cloudflare
 
 Este directorio contiene la configuración para el túnel de Cloudflare, que permite
-exponer n8n de forma segura a través de un puerto seguro.
+exponer n8n de forma segura a través de una conexión cifrada.
 
 ## Cloudflare Tunnel
 
@@ -42,11 +42,19 @@ cloudflared tunnel route dns n8n-tunnel n8n.tu-dominio.com
 
 ### Ejecutar el túnel
 
+Para ejecutar el túnel completo junto con n8n, es necesario usar ambos docker-compose:
+
 ```bash
-cloudflared tunnel --config cloudflare/config.yml run
+# Desde el directorio raíz del proyecto
+cd docker
+docker-compose up -d
+
+cd ../cloudflare  
+docker-compose up -d
 ```
 
-O usando Docker Compose (recomendado).
+**Nota**: El túnel de Cloudflare depende de que n8n esté corriendo en la red `n8n_network` 
+que se crea automáticamente con el docker-compose principal.
 
 ## Notas de Seguridad
 

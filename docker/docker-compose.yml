@@ -9,8 +9,8 @@ services:
       - "5678:5678"
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      - N8N_BASIC_AUTH_USER=${N8N_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
@@ -20,7 +20,13 @@ services:
       - n8n_data:/home/node/.n8n
       - ../workflows:/home/node/.n8n/workflows
       - ../n8n:/home/node/.n8n/config
+    networks:
+      - n8n_network
 
 volumes:
   n8n_data:
     driver: local
+
+networks:
+  n8n_network:
+    driver: bridge
