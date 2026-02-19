@@ -2,9 +2,9 @@
 # Configuración MCP para n8n
 # Este archivo configura el Model Context Protocol para trabajar con n8n
 
-version: "1.0"
+version: "2.0"
 name: n8n-mcp-config
-description: Configuración MCP para proyectos n8n con integración continua
+description: Configuración MCP para proyectos n8n con integración continua y n8n-mcp-server
 
 # Configuración del servidor n8n
 server:
@@ -12,6 +12,36 @@ server:
   type: n8n
   url: https://activated-arrangements-divine-power.trycloudflare.com/
   webhook_base_url: ${WEBHOOK_URL}
+  api_url: http://n8n:5678/api/v1
+
+# Configuración del MCP Server externo (leonardsellem/n8n-mcp-server v0.1.8)
+mcp_server:
+  name: n8n-mcp-server
+  type: leonardsellem/n8n-mcp-server
+  version: "0.1.8"
+  container: n8n-mcp-server
+  protocol_version: "2024-11-05"
+  capabilities:
+    workflows:
+      - list
+      - get
+      - create
+      - update
+      - delete
+      - activate
+      - deactivate
+    executions:
+      - run
+      - get
+      - list
+      - stop
+    webhooks:
+      - run_webhook
+  resources:
+    - "n8n://workflows/list"
+    - "n8n://workflow/{id}"
+    - "n8n://executions/{workflowId}"
+    - "n8n://execution/{id}"
 
 # Extensiones de archivos asociadas para n8n
 file_associations:
@@ -43,6 +73,9 @@ directories:
 # Variables de entorno persistentes
 environment:
   N8N_MCP_TOKEN: "${N8N_MCP_TOKEN}"
+  N8N_API_KEY: "${N8N_API_KEY}"
+  N8N_WEBHOOK_USERNAME: "${N8N_WEBHOOK_USERNAME}"
+  N8N_WEBHOOK_PASSWORD: "${N8N_WEBHOOK_PASSWORD}"
   WEBHOOK_URL: "${WEBHOOK_URL}"
   GITHUB_TOKEN: "${GITHUB_TOKEN}"
   N8N_HOST: "activated-arrangements-divine-power.trycloudflare.com"

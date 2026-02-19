@@ -76,6 +76,22 @@ services:
       timeout: 3s
       retries: 5
 
+  # n8n MCP Server - AI assistant integration via Model Context Protocol
+  # https://github.com/leonardsellem/n8n-mcp-server (v0.1.8, 1500+ ⭐)
+  n8n-mcp-server:
+    image: leonardsellem/n8n-mcp-server:latest
+    container_name: n8n-mcp-server
+    environment:
+      - N8N_API_URL=http://n8n:5678/api/v1
+      - N8N_API_KEY=${N8N_API_KEY}
+      - N8N_WEBHOOK_USERNAME=${N8N_WEBHOOK_USERNAME}
+      - N8N_WEBHOOK_PASSWORD=${N8N_WEBHOOK_PASSWORD}
+    depends_on:
+      - n8n
+    restart: unless-stopped
+    networks:
+      - n8n_network
+
   # Orchestrator - Autonomous Agent Loops
   orchestrator:
     build: ./agents/orchestrator

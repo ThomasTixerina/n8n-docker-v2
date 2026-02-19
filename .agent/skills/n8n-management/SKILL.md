@@ -1,6 +1,8 @@
 ---
 name: n8n-management
-description: Skill for managing n8n workflows, validating JSON, and performing health checks
+description: Skill for managing n8n workflows, validating JSON, performing health checks, and interacting via MCP server
+version: "1.1"
+updated: 2026-02-19
 ---
 
 # n8n Management Skill
@@ -243,6 +245,23 @@ This skill is for **manual operations**. For routine monitoring and auto-healing
 
 ---
 
+## Integration with n8n MCP Server
+
+For programmatic workflow management via AI assistants, use the **n8n MCP Server** (`leonardsellem/n8n-mcp-server` v0.1.8) running as a Docker service.
+
+See the **n8n-mcp-server** skill for detailed MCP server operations including:
+- `workflow_list`, `workflow_create`, `workflow_update` via MCP tools
+- `execution_run`, `run_webhook` for programmatic execution
+- MCP resources: `n8n://workflows/list`, `n8n://workflow/{id}`
+
+```bash
+# Check MCP server status
+docker logs n8n-mcp-server
+docker inspect n8n-mcp-server --format='{{.State.Status}}'
+```
+
+---
+
 ## Examples
 
 ### Scenario: User wants to create welcome email workflow
@@ -284,6 +303,6 @@ Invoke-WebRequest -Uri "$currentUrl/webhook/test" -Method POST
 
 ---
 
-**Last Updated**: 2026-01-16
-**Version**: 1.0
-**Compatibility**: n8n with Docker + Cloudflare Tunnel
+**Last Updated**: 2026-02-19
+**Version**: 1.1
+**Compatibility**: n8n with Docker + Cloudflare Tunnel + MCP Server

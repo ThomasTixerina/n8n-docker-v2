@@ -2,7 +2,7 @@
 
 ## 📋 Resumen
 
-Esta guía explica cómo está configurado el Model Context Protocol (MCP) para trabajar con n8n de manera continua en este proyecto.
+Esta guía explica cómo está configurado el Model Context Protocol (MCP) para trabajar con n8n de manera continua en este proyecto, incluyendo la integración con el **n8n MCP Server** externo (`leonardsellem/n8n-mcp-server` v0.1.8).
 
 ## 🎯 Objetivo
 
@@ -11,6 +11,7 @@ Configurar el entorno para que el MCP de n8n pueda:
 - Mantener la URL de n8n siempre disponible
 - Trabajar de forma continua sin interrupciones
 - Publicar workflows automáticamente
+- **Permitir a asistentes AI gestionar workflows vía MCP** (nuevo)
 
 ## 📁 Archivos de Configuración
 
@@ -35,6 +36,102 @@ Variables de entorno del proyecto:
 - URLs de servicios
 - Credenciales de base de datos
 - Configuración SSH
+
+## 🔌 n8n MCP Server (Nuevo)
+
+### ¿Qué es?
+
+El **n8n MCP Server** ([leonardsellem/n8n-mcp-server](https://github.com/leonardsellem/n8n-mcp-server)) es un servidor MCP comunitario (1500+ ⭐) que permite a asistentes AI (Claude, Cursor, etc.) interactuar con n8n a través del protocolo MCP.
+
+**Versión actual**: v0.1.8  
+**Docker image**: `leonardsellem/n8n-mcp-server:latest`  
+**npm package**: `@leonardsellem/n8n-mcp-server`
+
+### Configuración Docker
+
+El MCP server corre como servicio en `docker-compose.yml`:
+
+```yaml
+n8n-mcp-server:
+  image: leonardsellem/n8n-mcp-server:latest
+  container_name: n8n-mcp-server
+  environment:
+    - N8N_API_URL=http://n8n:5678/api/v1
+    - N8N_API_KEY=${N8N_API_KEY}
+    - N8N_WEBHOOK_USERNAME=${N8N_WEBHOOK_USERNAME}
+    - N8N_WEBHOOK_PASSWORD=${N8N_WEBHOOK_PASSWORD}
+  depends_on:
+    - n8n
+  restart: unless-stopped
+  networks:
+    - n8n_network
+```
+
+### Variables de Entorno Requeridas
+
+Agregar a `.env`:
+
+```bash
+# n8n MCP Server
+N8N_API_KEY=tu_n8n_api_key_aqui
+N8N_WEBHOOK_USERNAME=tu_webhook_usuario
+N8N_WEBHOOK_PASSWORD=tu_webhook_password
+```
+
+### Generar API Key de n8n
+
+1. Abrir n8n en el navegador
+2. Ir a **Settings → API → API Keys**
+3. Crear nueva API key con permisos apropiados
+4. Copiar la key al archivo `.env`
+
+### Herramientas MCP Disponibles
+
+| Herramienta | Descripción |
+|-------------|-------------|
+| `workflow_list` | Listar todos los workflows |
+| `workflow_get` | Obtener detalles de un workflow |
+| `workflow_create` | Crear un nuevo workflow |
+| `workflow_update` | Actualizar un workflow existente |
+| `workflow_delete` | Eliminar un workflow |
+| `workflow_activate` | Activar un workflow |
+| `workflow_deactivate` | Desactivar un workflow |
+| `execution_run` | Ejecutar un workflow |
+| `run_webhook` | Ejecutar vía webhook |
+| `execution_get` | Obtener detalles de ejecución |
+| `execution_list` | Listar ejecuciones |
+| `execution_stop` | Detener ejecución |
+
+### Recursos MCP
+
+- `n8n://workflows/list` — Lista de todos los workflows
+- `n8n://workflow/{id}` — Detalles de workflow específico
+- `n8n://executions/{workflowId}` — Lista de ejecuciones
+- `n8n://execution/{id}` — Detalles de ejecución
+
+### Integración con Claude Desktop / VS Code
+
+```json
+{
+  "mcpServers": {
+    "n8n": {
+      "command": "node",
+      "args": ["/path/to/n8n-mcp-server/build/index.js"],
+      "env": {
+        "N8N_API_URL": "http://localhost:5678/api/v1",
+        "N8N_API_KEY": "YOUR_N8N_API_KEY"
+      }
+    }
+  }
+}
+```
+
+### Verificar Estado del MCP Server
+
+```bash
+docker logs n8n-mcp-server
+docker inspect n8n-mcp-server --format='{{.State.Status}}'
+```
 
 ## 🔧 Extensiones de Archivo Asociadas
 
@@ -224,6 +321,12 @@ n8n-infrastructure/
 │   ├── workflows/
 │   │   ├── n8n-startup.md
 │   │   └── publish-workflow.md
+│   ├── skills/
+│   │   ├── n8n-management/        # Gestión manual de n8n
+│   │   ├── n8n-mcp-server/        # Integración MCP server (v0.1.8)
+│   │   ├── creating-antigravity-skills/
+│   │   ├── loopic-integration/
+│   │   └── brand-identity/
 │   └── mcp-config.yaml
 ├── .vscode/
 │   └── settings.json
@@ -348,6 +451,6 @@ Para problemas o preguntas:
 
 ---
 
-**Última actualización**: 2025-12-25
-**Versión**: 1.0
+**Última actualización**: 2026-02-19
+**Versión**: 2.0
 **Autor**: Configuración automática MCP

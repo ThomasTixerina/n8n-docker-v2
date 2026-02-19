@@ -1,14 +1,18 @@
 const http = require('http');
 
+// Test connection to n8n MCP Server (leonardsellem/n8n-mcp-server v0.1.8)
+// Default: connects to n8n's built-in MCP endpoint
+// To test the external MCP server, change the port/path as needed
+
 const options = {
-  hostname: 'localhost',
-  port: 5678,
+  hostname: process.env.N8N_MCP_HOST || 'localhost',
+  port: parseInt(process.env.N8N_MCP_PORT || '5678'),
   path: '/mcp-server/http',
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json, text/event-stream',
-    'Authorization': 'Bearer YOUR_TOKEN_HERE'
+    'Authorization': `Bearer ${process.env.N8N_API_KEY || 'YOUR_TOKEN_HERE'}`
   }
 };
 
