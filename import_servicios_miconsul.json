@@ -1,0 +1,132 @@
+{
+  "name": "MiConsulUno - Importar Administración: Especialidades + Servicios",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "▶️ Inicio Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "c001", "name": "practica_id", "value": 1, "type": "number" },
+            { "id": "c002", "name": "csv_url", "value": "https://docs.google.com/spreadsheets/d/1VAFtGLJ7nAl0uBQwOCzgjjTMvNkaLAY0/export?format=csv", "type": "string" },
+            { "id": "c003", "name": "duracion_default", "value": 30, "type": "number" },
+            { "id": "c004", "name": "meses_default", "value": 1, "type": "number" },
+            { "id": "c005", "name": "iva_default", "value": 0, "type": "number" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "⚙️ Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT IGNORE INTO especialidades (especialidad, practica_id) VALUES\n('Operatoria', {{ $json.practica_id }}),\n('Diagnóstico', {{ $json.practica_id }}),\n('Odontología General', {{ $json.practica_id }}),\n('Cirugía', {{ $json.practica_id }}),\n('Laboratorio Dental', {{ $json.practica_id }}),\n('Endodoncia', {{ $json.practica_id }}),\n('Prostodoncia', {{ $json.practica_id }}),\n('Rehabilitación Oral', {{ $json.practica_id }}),\n('Maxilofacial', {{ $json.practica_id }}),\n('Ortodoncia', {{ $json.practica_id }}),\n('Implantología', {{ $json.practica_id }}),\n('Odontopediatría', {{ $json.practica_id }}),\n('Periodoncia', {{ $json.practica_id }}),\n('Artículos y Materiales', {{ $json.practica_id }}),\n('Urgencias', {{ $json.practica_id }})"
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "🏷️ Crear Especialidades (15)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [620, 300],
+      "credentials": { "mySql": { "id": "7KzZxdBmNl9SdLZT", "name": "MySQL MiConsulUno" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, especialidad FROM especialidades WHERE practica_id = {{ $('⚙️ Configuración').first().json.practica_id }} ORDER BY id ASC"
+      },
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "📋 Obtener IDs Especialidades",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [840, 300],
+      "credentials": { "mySql": { "id": "7KzZxdBmNl9SdLZT", "name": "MySQL MiConsulUno" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst cfg = $('⚙️ Configuración').first().json;\nconst map = {};\nfor (const item of allItems) {\n  const { id, especialidad } = item.json;\n  if (!especialidad || !id) continue;\n  const idInt = parseInt(id);\n  const nombre = especialidad.trim();\n  map[nombre] = idInt;\n  map[nombre.toLowerCase()] = idInt;\n  const sinAcentos = nombre.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n  map[sinAcentos] = idInt;\n}\nconst aliases = {\n  'Odontologia General': 'Odontología General',\n  'Cirugia': 'Cirugía',\n  'Implantes': 'Implantología',\n  'Articulo': 'Artículos y Materiales',\n  'Artículo': 'Artículos y Materiales',\n  'Diagnostico': 'Diagnóstico',\n  'Rehabilitacion Oral': 'Rehabilitación Oral',\n  'Odontopediatria': 'Odontopediatría',\n  'Implantologia': 'Implantología',\n};\nfor (const [alias, canonical] of Object.entries(aliases)) {\n  const canonicalId = map[canonical] || map[canonical.toLowerCase()];\n  if (canonicalId !== undefined) { map[alias] = canonicalId; map[alias.toLowerCase()] = canonicalId; }\n}\nconst defaultId = map['Odontología General'] || 1;\nreturn [{ json: { specialtyMap: map, defaultSpecialtyId: defaultId, practica_id: cfg.practica_id, csv_url: cfg.csv_url, duracion: cfg.duracion_default, meses: cfg.meses_default, iva: cfg.iva_default } }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "🗺️ Construir Mapa Especialidades",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.csv_url }}",
+        "method": "GET",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "📥 Descargar CSV Google Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const httpData = $input.first().json;\nconst csvText = httpData.data || httpData.body || '';\nconst mapNode = $('🗺️ Construir Mapa Especialidades').first().json;\nconst specialtyMap = mapNode.specialtyMap;\nconst defaultId = mapNode.defaultSpecialtyId;\nconst practica_id = mapNode.practica_id;\nfunction parseCSVLine(line) {\n  const result = []; let current = ''; let inQuotes = false;\n  for (let i = 0; i < line.length; i++) {\n    const ch = line[i];\n    if (ch === '\"') { if (inQuotes && line[i+1] === '\"') { current += '\"'; i++; } else inQuotes = !inQuotes; }\n    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }\n    else current += ch;\n  }\n  result.push(current.trim()); return result;\n}\nfunction parsePrice(raw) { if (!raw) return 0; const cleaned = raw.replace(/[^0-9.]/g, ''); return parseFloat(cleaned) || 0; }\nconst lines = csvText.split(/\\r?\\n/);\nconst rawHeaders = parseCSVLine(lines[4]);\nconst headers = rawHeaders.map(h => h.trim());\nconst iEspecialidad = headers.findIndex(h => h.toLowerCase().includes('especialidad'));\nconst iDescripcion = headers.findIndex(h => h.toLowerCase().includes('descripci'));\nconst iPrecioEfec = headers.findIndex(h => h.toLowerCase().includes('precio efectivo'));\nconst items = [];\nfor (let i = 5; i < lines.length; i++) {\n  const line = lines[i]; if (!line || !line.trim()) continue;\n  const values = parseCSVLine(line);\n  const nombreServicio = (values[iDescripcion] || '').trim();\n  const unit_price = parsePrice(values[iPrecioEfec]);\n  if (!nombreServicio || unit_price <= 0) continue;\n  const espNombre = iEspecialidad >= 0 ? (values[iEspecialidad] || '').trim() : '';\n  const especialidadId = specialtyMap[espNombre] || specialtyMap[espNombre.toLowerCase()] || defaultId;\n  items.push({ json: { name: nombreServicio, unit_price, duracion: mapNode.duracion, especialidad: especialidadId, meses: mapNode.meses, costo: unit_price, iva: mapNode.iva, descuento_efectivo: 0, practica_id, eliminado: 0 } });\n}\nreturn items;",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "📊 Parsear CSV + Mapear Campos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ospos_items (name, unit_price, duracion, especialidad, meses, costo, iva, descuento_efectivo, practica_id, eliminado)\nSELECT '{{ $json.name.replace(/'/g, \"''\") }}', {{ $json.unit_price }}, {{ $json.duracion }}, {{ $json.especialidad }}, {{ $json.meses }}, {{ $json.costo }}, {{ $json.iva }}, {{ $json.descuento_efectivo }}, {{ $json.practica_id }}, {{ $json.eliminado }}\nFROM DUAL WHERE NOT EXISTS (SELECT 1 FROM ospos_items WHERE name = '{{ $json.name.replace(/'/g, \"''\") }}' AND practica_id = {{ $json.practica_id }} AND eliminado = 0)"
+      },
+      "id": "a1b2c3d4-0008-0008-0008-000000000008",
+      "name": "💾 Insertar Servicio (IF NOT EXISTS)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [1720, 300],
+      "credentials": { "mySql": { "id": "7KzZxdBmNl9SdLZT", "name": "MySQL MiConsulUno" } }
+    },
+    {
+      "parameters": { "aggregate": "aggregateAllItemData" },
+      "id": "a1b2c3d4-0009-0009-0009-000000000009",
+      "name": "📦 Agrupar Resultados",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1940, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { status: '✅ Importación completada', total: ($input.first().json.data || []).length, timestamp: new Date().toLocaleString() } }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a1b2c3d4-0010-0010-0010-000000000010",
+      "name": "✅ Resumen Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 300]
+    }
+  ],
+  "connections": {
+    "▶️ Inicio Manual": { "main": [[{ "node": "⚙️ Configuración", "type": "main", "index": 0 }]] },
+    "⚙️ Configuración": { "main": [[{ "node": "🏷️ Crear Especialidades (15)", "type": "main", "index": 0 }]] },
+    "🏷️ Crear Especialidades (15)": { "main": [[{ "node": "📋 Obtener IDs Especialidades", "type": "main", "index": 0 }]] },
+    "📋 Obtener IDs Especialidades": { "main": [[{ "node": "🗺️ Construir Mapa Especialidades", "type": "main", "index": 0 }]] },
+    "🗺️ Construir Mapa Especialidades": { "main": [[{ "node": "📥 Descargar CSV Google Sheets", "type": "main", "index": 0 }]] },
+    "📥 Descargar CSV Google Sheets": { "main": [[{ "node": "📊 Parsear CSV + Mapear Campos", "type": "main", "index": 0 }]] },
+    "📊 Parsear CSV + Mapear Campos": { "main": [[{ "node": "💾 Insertar Servicio (IF NOT EXISTS)", "type": "main", "index": 0 }]] },
+    "💾 Insertar Servicio (IF NOT EXISTS)": { "main": [[{ "node": "📦 Agrupar Resultados", "type": "main", "index": 0 }]] },
+    "📦 Agrupar Resultados": { "main": [[{ "node": "✅ Resumen Final", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true }
+}
