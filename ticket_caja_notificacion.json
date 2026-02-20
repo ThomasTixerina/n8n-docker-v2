@@ -1,0 +1,299 @@
+{
+  "name": "Ticket de Caja: Notificación Email + WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-caja",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Venta Completada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "notes": "Recibe evento sale_created desde PHP o desde el Hub de Eventos. Payload esperado: { event: 'sale_created', data: { sale_id, customer_id } }"
+    },
+
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "clinica_nombre",  "value": "MiConsul Dental" },
+            { "name": "clinica_slogan",  "value": "Sonrisas que duran toda la vida" },
+            { "name": "clinica_logo_url","value": "https://tu-dominio.com/assets/logo-miconsul.png" },
+            { "name": "clinica_color_primario", "value": "#1a73e8" },
+            { "name": "clinica_color_secundario", "value": "#0d47a1" },
+            { "name": "clinica_tel",     "value": "+52 81 1234 5678" },
+            { "name": "clinica_email",   "value": "contacto@miconsul.com" },
+            { "name": "clinica_web",     "value": "www.miconsul.com" },
+            { "name": "clinica_instagram","value": "@miconsul_dental" },
+            { "name": "email_from",      "value": "notificaciones@miconsul.com" },
+            { "name": "whatsapp_sender", "value": "+5218112345678" },
+            { "name": "ycloud_template_ticket", "value": "ticket_pago_miconsul" },
+            { "name": "ycloud_template_anticipo", "value": "anticipo_miconsul" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-clinica",
+      "name": "Config: Clínica",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [240, 80],
+      "notes": "EDITA AQUÍ: Personaliza todos los datos de la clínica antes de activar."
+    },
+
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT\n  s.sale_id,\n  DATE_FORMAT(s.sale_time, '%d/%m/%Y') AS fecha,\n  TIME_FORMAT(s.sale_time, '%H:%i') AS hora,\n  s.subtotal,\n  s.tax,\n  s.total,\n  s.internal_comment AS nota,\n  s.is_suspended,\n  CONCAT(p.first_name, ' ', p.last_name) AS paciente_nombre,\n  p.email AS paciente_email,\n  p.phone_number AS paciente_telefono,\n  CONCAT(emp.first_name, ' ', emp.last_name) AS recepcion,\n  CONCAT(doc.first_name, ' ', doc.last_name) AS doctor,\n  suc.name AS sucursal_nombre,\n  suc.phone AS sucursal_tel,\n  suc.address AS sucursal_dir\nFROM miconsul_uno.ospos_sales s\nLEFT JOIN miconsul_uno.ospos_people p   ON s.customer_id   = p.person_id\nLEFT JOIN miconsul_uno.ospos_people emp ON s.employee_id   = emp.person_id\nLEFT JOIN miconsul_uno.ospos_people doc ON s.doctor_id     = doc.person_id\nLEFT JOIN miconsul_uno.ospos_locations suc ON s.store_id   = suc.location_id\nWHERE s.sale_id = {{$json.body.data.sale_id}}\nLIMIT 1;"
+      },
+      "id": "mysql-sale-header",
+      "name": "MySQL: Datos de la Venta",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "mySql": {
+          "id": "1",
+          "name": "Mi Consul DB"
+        }
+      },
+      "notes": "Obtiene header de venta + datos del paciente, empleado, doctor y sucursal."
+    },
+
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT\n  i.name AS servicio,\n  si.unit_price AS precio,\n  si.quantity_purchased AS cantidad,\n  si.discount_percent AS descuento,\n  ROUND(si.unit_price * si.quantity_purchased * (1 - si.discount_percent / 100), 2) AS total_item\nFROM miconsul_uno.ospos_sale_items si\nLEFT JOIN miconsul_uno.ospos_items i ON si.item_id = i.item_id\nWHERE si.sale_id = {{$('MySQL: Datos de la Venta').item.json.sale_id}}\nORDER BY si.line ASC;"
+      },
+      "id": "mysql-sale-items",
+      "name": "MySQL: Servicios del Ticket",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [480, 480],
+      "credentials": {
+        "mySql": {
+          "id": "1",
+          "name": "Mi Consul DB"
+        }
+      },
+      "notes": "Obtiene el detalle de cada servicio/producto incluido en la venta."
+    },
+
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT\n  payment_type AS metodo,\n  payment_amount * -1 AS monto\nFROM miconsul_uno.ospos_sale_payments\nWHERE sale_id = {{$('MySQL: Datos de la Venta').item.json.sale_id}}\nORDER BY payment_id ASC;"
+      },
+      "id": "mysql-payments",
+      "name": "MySQL: Forma de Pago",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [480, 660],
+      "credentials": {
+        "mySql": {
+          "id": "1",
+          "name": "Mi Consul DB"
+        }
+      },
+      "notes": "Obtiene los métodos de pago utilizados (efectivo, tarjeta, anticipos)."
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────\n//  CODE NODE: Construir datos para Email y WhatsApp\n// ─────────────────────────────────────────────\n\n// ── Obtener datos de los nodos anteriores ──\nconst sale    = $('MySQL: Datos de la Venta').first().json;\nconst items   = $('MySQL: Servicios del Ticket').all().map(i => i.json);\nconst pagos   = $('MySQL: Forma de Pago').all().map(p => p.json);\nconst config  = $('Config: Clínica').first().json;\n\n// ── Helpers ──────────────────────────────────\nconst formatMXN = (n) => `$${parseFloat(n || 0).toFixed(2).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',')}`;\nconst esAnticipo = sale.is_suspended === '1' || sale.is_suspended === 1;\nconst tipoTicket = esAnticipo ? 'Recibo de Anticipo' : 'Comprobante de Pago';\n\n// ── CAMBIO / PENDIENTE ───────────────────────\nconst totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto || 0), 0);\nconst saldo = parseFloat(sale.total) - totalPagado;\nconst saldoLabel = esAnticipo ? 'Saldo pendiente' : 'Cambio';\nconst saldoValor = esAnticipo ? formatMXN(Math.abs(saldo)) : formatMXN(saldo >= 0 ? saldo : Math.abs(saldo));\n\n// ── TABLA DE SERVICIOS (HTML) ─────────────────\nconst filasServicios = items.map(item => {\n  const desc = item.descuento > 0\n    ? `<span style=\"color:#e53935;font-size:11px;\">-${item.descuento}%</span>`\n    : '';\n  return `\n    <tr>\n      <td style=\"padding:8px 10px;border-bottom:1px solid #f0f4f8;color:#37474f;\">${item.servicio}</td>\n      <td style=\"padding:8px 10px;border-bottom:1px solid #f0f4f8;text-align:center;color:#546e7a;\">${item.cantidad}</td>\n      <td style=\"padding:8px 10px;border-bottom:1px solid #f0f4f8;text-align:right;color:#546e7a;\">${formatMXN(item.precio)} ${desc}</td>\n      <td style=\"padding:8px 10px;border-bottom:1px solid #f0f4f8;text-align:right;font-weight:600;color:#1a237e;\">${formatMXN(item.total_item)}</td>\n    </tr>`;\n}).join('');\n\n// ── FORMA DE PAGO (HTML) ─────────────────────\nconst filasPagos = pagos.map(p => {\n  const metodoBadge = {\n    'Efectivo': '💵',\n    'Tarjeta':  '💳',\n    'Transferencia': '🏦',\n    'Cheque':   '📄'\n  };\n  const icono = metodoBadge[p.metodo] || '💰';\n  return `\n    <tr>\n      <td style=\"padding:5px 10px;color:#546e7a;\">${icono} ${p.metodo}</td>\n      <td style=\"padding:5px 10px;text-align:right;color:#1b5e20;font-weight:600;\">${formatMXN(p.monto)}</td>\n    </tr>`;\n}).join('');\n\n// ── TEMPLATE HTML DEL EMAIL ──────────────────\nconst htmlEmail = `\n<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body style=\"margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;\">\n\n  <!-- Wrapper -->\n  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f0f4f8;padding:20px 0;\">\n    <tr><td align=\"center\">\n\n    <!-- Card principal -->\n    <table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-width:600px;width:100%;\">\n\n      <!-- HEADER con color de marca -->\n      <tr>\n        <td style=\"background:linear-gradient(135deg, ${config.clinica_color_primario} 0%, ${config.clinica_color_secundario} 100%);padding:30px 40px;text-align:center;\">\n          <h1 style=\"color:#ffffff;margin:0;font-size:26px;font-weight:700;letter-spacing:1px;\">\n            🦷 ${config.clinica_nombre}\n          </h1>\n          <p style=\"color:rgba(255,255,255,0.85);margin:6px 0 0 0;font-size:13px;\">\n            ${config.clinica_slogan}\n          </p>\n        </td>\n      </tr>\n\n      <!-- TIPO DE TICKET -->\n      <tr>\n        <td style=\"background:#e8f5e9;padding:14px 40px;text-align:center;border-bottom:1px solid #c8e6c9;\">\n          <span style=\"font-size:15px;font-weight:700;color:#2e7d32;\">✅ ${tipoTicket}</span>\n          &nbsp;&nbsp;\n          <span style=\"font-size:12px;color:#546e7a;\">Folio: <b>#${sale.sale_id}</b></span>\n          &nbsp;&nbsp;\n          <span style=\"font-size:12px;color:#546e7a;\">Fecha: ${sale.fecha} ${sale.hora}</span>\n        </td>\n      </tr>\n\n      <!-- DATOS DEL PACIENTE -->\n      <tr>\n        <td style=\"padding:20px 40px 10px 40px;\">\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n            <tr>\n              <td style=\"width:50%;\">\n                <p style=\"margin:0;font-size:12px;color:#90a4ae;text-transform:uppercase;letter-spacing:1px;\">Paciente</p>\n                <p style=\"margin:4px 0 0 0;font-size:16px;font-weight:700;color:#1a237e;\">👤 ${sale.paciente_nombre}</p>\n              </td>\n              <td style=\"width:50%;text-align:right;\">\n                <p style=\"margin:0;font-size:12px;color:#90a4ae;text-transform:uppercase;letter-spacing:1px;\">Atendió</p>\n                <p style=\"margin:4px 0 0 0;font-size:14px;font-weight:600;color:#37474f;\">👨‍⚕️ ${sale.doctor || 'Sin asignar'}</p>\n              </td>\n            </tr>\n          </table>\n          <hr style=\"border:none;border-top:1px solid #e8eaf6;margin:15px 0;\">\n        </td>\n      </tr>\n\n      <!-- TABLA DE SERVICIOS -->\n      <tr>\n        <td style=\"padding:0 40px;\">\n          <p style=\"margin:0 0 8px 0;font-size:12px;color:#90a4ae;text-transform:uppercase;letter-spacing:1px;\">Servicios Realizados</p>\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-radius:8px;overflow:hidden;border:1px solid #e8eaf6;\">\n            <tr style=\"background:#e8eaf6;\">\n              <th style=\"padding:10px;text-align:left;font-size:12px;color:#3949ab;font-weight:600;\">Concepto</th>\n              <th style=\"padding:10px;text-align:center;font-size:12px;color:#3949ab;font-weight:600;\">Cant.</th>\n              <th style=\"padding:10px;text-align:right;font-size:12px;color:#3949ab;font-weight:600;\">Precio</th>\n              <th style=\"padding:10px;text-align:right;font-size:12px;color:#3949ab;font-weight:600;\">Total</th>\n            </tr>\n            ${filasServicios}\n          </table>\n        </td>\n      </tr>\n\n      <!-- TOTALES -->\n      <tr>\n        <td style=\"padding:15px 40px;\">\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n            <tr>\n              <td style=\"padding:4px 10px;text-align:right;color:#546e7a;font-size:13px;\">Subtotal</td>\n              <td style=\"padding:4px 10px;text-align:right;color:#546e7a;font-size:13px;width:100px;\">${formatMXN(sale.subtotal)}</td>\n            </tr>\n            ${parseFloat(sale.tax) > 0 ? `<tr><td style=\"padding:4px 10px;text-align:right;color:#546e7a;font-size:13px;\">Impuestos</td><td style=\"padding:4px 10px;text-align:right;color:#546e7a;font-size:13px;\">${formatMXN(sale.tax)}</td></tr>` : ''}\n            <tr style=\"background:#e8f5e9;border-radius:6px;\">\n              <td style=\"padding:10px;text-align:right;font-weight:700;color:#1b5e20;font-size:16px;\">TOTAL</td>\n              <td style=\"padding:10px;text-align:right;font-weight:700;color:#1b5e20;font-size:18px;\">${formatMXN(sale.total)}</td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n\n      <!-- FORMA DE PAGO -->\n      <tr>\n        <td style=\"padding:0 40px 20px 40px;\">\n          <p style=\"margin:0 0 8px 0;font-size:12px;color:#90a4ae;text-transform:uppercase;letter-spacing:1px;\">Forma de Pago</p>\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border:1px solid #e8eaf6;border-radius:8px;\">\n            ${filasPagos}\n            <tr style=\"background:#f3e5f5;\">\n              <td style=\"padding:8px 10px;font-weight:700;color:#6a1b9a;\">${saldoLabel}</td>\n              <td style=\"padding:8px 10px;text-align:right;font-weight:700;color:#6a1b9a;\">${saldoValor}</td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n\n      ${sale.nota ? `<!-- NOTA --><tr><td style=\"padding:0 40px 15px 40px;\"><div style=\"background:#fff9c4;border-left:4px solid #f9a825;padding:10px 15px;border-radius:4px;\"><p style=\"margin:0;font-size:13px;color:#f57f17;\">📝 <b>Nota:</b> ${sale.nota}</p></div></td></tr>` : ''}\n\n      <!-- SUCURSAL -->\n      <tr>\n        <td style=\"padding:0 40px 20px 40px;\">\n          <hr style=\"border:none;border-top:1px solid #e8eaf6;margin:0 0 15px 0;\">\n          <table width=\"100%\">\n            <tr>\n              <td style=\"font-size:12px;color:#78909c;\">📍 ${sale.sucursal_nombre || config.clinica_nombre}</td>\n              <td style=\"font-size:12px;color:#78909c;text-align:right;\">📞 ${sale.sucursal_tel || config.clinica_tel}</td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n\n      <!-- FOOTER -->\n      <tr>\n        <td style=\"background:linear-gradient(135deg, ${config.clinica_color_primario} 0%, ${config.clinica_color_secundario} 100%);padding:20px 40px;text-align:center;\">\n          <p style=\"color:rgba(255,255,255,0.9);margin:0;font-size:12px;\">\n            ¿Tienes alguna pregunta? Escríbenos a\n            <a href=\"mailto:${config.clinica_email}\" style=\"color:#ffffff;font-weight:600;\">${config.clinica_email}</a>\n          </p>\n          <p style=\"color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:11px;\">\n            🌐 ${config.clinica_web} &nbsp;|&nbsp; 📱 ${config.clinica_instagram}\n          </p>\n          <p style=\"color:rgba(255,255,255,0.5);margin:10px 0 0 0;font-size:10px;\">\n            Este es un comprobante generado automáticamente. No responder a este correo.\n          </p>\n        </td>\n      </tr>\n\n    </table>\n    <!-- /Card principal -->\n\n    </td></tr>\n  </table>\n\n</body>\n</html>`;\n\n// ── MENSAJE WHATSAPP (corto, impactante) ─────\nconst itemsResumen = items.slice(0, 3).map(i => `  • ${i.servicio}: ${formatMXN(i.total_item)}`).join('\\n');\nconst masItems = items.length > 3 ? `  _(+${items.length - 3} servicio(s) más)_` : '';\n\nconst mensajeWhatsapp = \n  `🦷 *${config.clinica_nombre}*\\n` +\n  `─────────────────\\n` +\n  `✅ *${tipoTicket}*\\n` +\n  `📋 Folio #${sale.sale_id} | ${sale.fecha}\\n\\n` +\n  `👤 *${sale.paciente_nombre}*\\n` +\n  (sale.doctor ? `👨‍⚕️ Atendió: ${sale.doctor}\\n` : '') +\n  `\\n📌 *Servicios:*\\n${itemsResumen}\\n${masItems}\\n\\n` +\n  `💰 *Total: ${formatMXN(sale.total)}*\\n` +\n  `${pagos.length > 0 ? `💳 Pago: ${pagos.map(p=>`${p.metodo} ${formatMXN(p.monto)}`).join(' + ')}\\n` : ''}` +\n  `${esAnticipo ? `⏳ Saldo pendiente: ${saldoValor}\\n` : ''}` +\n  `\\n¡Gracias por tu confianza! 😊\\n` +\n  `─────────────────\\n` +\n  `📞 ${config.clinica_tel} | ${config.clinica_web}`;\n\n// ── RETORNAR TODO ─────────────────────────────\nreturn [{\n  json: {\n    // Datos del sale para uso en nodos siguientes\n    sale_id:             sale.sale_id,\n    paciente_nombre:     sale.paciente_nombre,\n    paciente_email:      sale.paciente_email,\n    paciente_telefono:   sale.paciente_telefono,\n    fecha:               sale.fecha,\n    total:               sale.total,\n    es_anticipo:         esAnticipo,\n    tiene_email:         !!sale.paciente_email,\n    tiene_telefono:      !!sale.paciente_telefono,\n    // Templates construidos\n    html_email:          htmlEmail,\n    texto_whatsapp:      mensajeWhatsapp,\n    // Config accesible\n    clinica_nombre:      config.clinica_nombre,\n    email_from:          config.email_from,\n    whatsapp_sender:     config.whatsapp_sender,\n    ycloud_template:     esAnticipo ? config.ycloud_template_anticipo : config.ycloud_template_ticket\n  }\n}];"
+      },
+      "id": "code-build-templates",
+      "name": "Code: Construir Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 480],
+      "notes": "Procesa todos los datos de MySQL y construye: HTML para email y mensaje para WhatsApp."
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.tiene_email}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-email",
+      "name": "Tiene Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 340],
+      "notes": "Verifica que el paciente tenga correo registrado antes de intentar enviar."
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.tiene_telefono}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-phone",
+      "name": "Tiene WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 620],
+      "notes": "Verifica que el paciente tenga teléfono registrado antes de enviar WhatsApp."
+    },
+
+    {
+      "parameters": {
+        "fromEmail": "={{$json.email_from}}",
+        "toEmail": "={{$json.paciente_email}}",
+        "subject": "=✅ Tu comprobante de pago - {{$json.clinica_nombre}} | Folio #{{$json.sale_id}}",
+        "html": "={{$json.html_email}}",
+        "options": {
+          "replyTo": "={{$json.email_from}}"
+        }
+      },
+      "id": "send-email",
+      "name": "Enviar Email: Ticket",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1240, 240],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Gmail SMTP"
+        }
+      },
+      "notes": "Envía el HTML del ticket al correo del paciente."
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ycloud.com/v2/whatsapp/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"{{$json.whatsapp_sender}}\",\n  \"to\": \"{{$json.paciente_telefono}}\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"{{$json.ycloud_template}}\",\n    \"language\": {\n      \"code\": \"es_MX\"\n    },\n    \"components\": [\n      {\n        \"type\": \"header\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"#{{$json.sale_id}}\"\n          }\n        ]\n      },\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"{{$json.paciente_nombre}}\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"${{$json.total}}\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"{{$json.fecha}}\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "id": "send-whatsapp-ycloud",
+      "name": "Enviar WhatsApp: YCloud",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1240, 560],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "YCloud API Key"
+        }
+      },
+      "notes": "Envía template de WhatsApp aprobado por Meta via YCloud. Requiere template 'ticket_pago_miconsul' o 'anticipo_miconsul' creado y aprobado en YCloud."
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Log de resultado\nconst emailSent = $('Enviar Email: Ticket').all().length > 0;\nconst waSent    = $('Enviar WhatsApp: YCloud').all().length > 0;\nconst sale      = $('Code: Construir Ticket').first().json;\n\nconsole.log(`[TICKET] Venta #${sale.sale_id} - ${sale.paciente_nombre}`);\nconsole.log(`[TICKET] Email: ${emailSent ? '✅ Enviado' : '⚠️ Sin email'}`);\nconsole.log(`[TICKET] WhatsApp: ${waSent ? '✅ Enviado' : '⚠️ Sin teléfono'}`);\n\nreturn [{\n  json: {\n    sale_id:    sale.sale_id,\n    paciente:   sale.paciente_nombre,\n    email_ok:   emailSent,\n    wa_ok:      waSent,\n    timestamp:  new Date().toISOString(),\n    status:     'completed'\n  }\n}];"
+      },
+      "id": "log-result",
+      "name": "Log: Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 400],
+      "notes": "Registra en consola de n8n el resultado del envío para auditoría."
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\":\"ok\",\"sale_id\":\"{{$('Code: Construir Ticket').first().json.sale_id}}\",\"notificaciones_enviadas\":true}"
+      },
+      "id": "respond-webhook",
+      "name": "Respuesta Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1500, 180],
+      "notes": "Responde al PHP confirmando que el ticket fue procesado."
+    }
+  ],
+
+  "connections": {
+    "Webhook: Venta Completada": {
+      "main": [[
+        { "node": "Config: Clínica",          "type": "main", "index": 0 },
+        { "node": "MySQL: Datos de la Venta", "type": "main", "index": 0 }
+      ]]
+    },
+    "MySQL: Datos de la Venta": {
+      "main": [[
+        { "node": "MySQL: Servicios del Ticket", "type": "main", "index": 0 },
+        { "node": "MySQL: Forma de Pago",        "type": "main", "index": 0 }
+      ]]
+    },
+    "MySQL: Servicios del Ticket": {
+      "main": [[{ "node": "Code: Construir Ticket", "type": "main", "index": 0 }]]
+    },
+    "MySQL: Forma de Pago": {
+      "main": [[{ "node": "Code: Construir Ticket", "type": "main", "index": 0 }]]
+    },
+    "Code: Construir Ticket": {
+      "main": [[
+        { "node": "Tiene Email?",    "type": "main", "index": 0 },
+        { "node": "Tiene WhatsApp?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Tiene Email?": {
+      "main": [
+        [{ "node": "Enviar Email: Ticket",  "type": "main", "index": 0 }],
+        [{ "node": "Log: Resultado",         "type": "main", "index": 0 }]
+      ]
+    },
+    "Tiene WhatsApp?": {
+      "main": [
+        [{ "node": "Enviar WhatsApp: YCloud", "type": "main", "index": 0 }],
+        [{ "node": "Log: Resultado",           "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar Email: Ticket": {
+      "main": [[
+        { "node": "Log: Resultado",     "type": "main", "index": 0 },
+        { "node": "Respuesta Webhook",  "type": "main", "index": 0 }
+      ]]
+    },
+    "Enviar WhatsApp: YCloud": {
+      "main": [[{ "node": "Log: Resultado", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+
+  "meta": {
+    "description": "Envía comprobante de pago automáticamente al paciente por Email (HTML template) y WhatsApp (YCloud) al completar una venta en MiConsul. Compatible con ventas normales y anticipos.",
+    "version": "1.0.0",
+    "author": "MiConsul + Claude Code"
+  }
+}
