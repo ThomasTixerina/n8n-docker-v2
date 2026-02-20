@@ -7,17 +7,37 @@
       "name": "▶️ Inicio Manual",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [180, 300]
+      "position": [180, 200],
+      "notes": "Ejecutar manualmente cuando se necesite importar de inmediato."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000099",
+      "name": "⏰ Sincronización Automática (Diaria 6AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 440],
+      "notes": "Se ejecuta todos los días a las 6:00 AM automáticamente. Jala la lista de precios más reciente del Google Sheet del cliente y la importa."
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "c001", "name": "practica_id", "value": 1, "type": "number" },
-            { "id": "c002", "name": "csv_url", "value": "https://docs.google.com/spreadsheets/d/1VAFtGLJ7nAl0uBQwOCzgjjTMvNkaLAY0/export?format=csv", "type": "string" },
-            { "id": "c003", "name": "duracion_default", "value": 30, "type": "number" },
-            { "id": "c004", "name": "meses_default", "value": 1, "type": "number" },
-            { "id": "c005", "name": "iva_default", "value": 0, "type": "number" }
+            { "id": "c002", "name": "google_sheet_id", "value": "1VAFtGLJ7nAl0uBQwOCzgjjTMvNkaLAY0", "type": "string" },
+            { "id": "c003", "name": "csv_url", "value": "=https://docs.google.com/spreadsheets/d/{{ $json.google_sheet_id || '1VAFtGLJ7nAl0uBQwOCzgjjTMvNkaLAY0' }}/export?format=csv", "type": "string" },
+            { "id": "c004", "name": "duracion_default", "value": 30, "type": "number" },
+            { "id": "c005", "name": "meses_default", "value": 1, "type": "number" },
+            { "id": "c006", "name": "iva_default", "value": 0, "type": "number" }
           ]
         }
       },
@@ -25,7 +45,8 @@
       "name": "⚙️ Configuración",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [400, 300]
+      "position": [460, 300],
+      "notes": "📌 DOCUMENTO FIJO: Solo cambia el 'google_sheet_id' si el cliente te da un nuevo Google Sheet.\nEl ID es la parte larga de la URL de Google Sheets: https://docs.google.com/spreadsheets/d/{ESTE_ES_EL_ID}/edit\nEl documento debe estar compartido como 'Cualquier persona con el enlace puede ver'."
     },
     {
       "parameters": {
@@ -36,7 +57,7 @@
       "name": "🏷️ Crear Especialidades (15)",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [620, 300],
+      "position": [700, 300],
       "credentials": { "mySql": { "id": "7KzZxdBmNl9SdLZT", "name": "MySQL MiConsulUno" } }
     },
     {
@@ -48,19 +69,19 @@
       "name": "📋 Obtener IDs Especialidades",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [840, 300],
+      "position": [920, 300],
       "credentials": { "mySql": { "id": "7KzZxdBmNl9SdLZT", "name": "MySQL MiConsulUno" } }
     },
     {
       "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst cfg = $('⚙️ Configuración').first().json;\nconst map = {};\nfor (const item of allItems) {\n  const { id, especialidad } = item.json;\n  if (!especialidad || !id) continue;\n  const idInt = parseInt(id);\n  const nombre = especialidad.trim();\n  map[nombre] = idInt;\n  map[nombre.toLowerCase()] = idInt;\n  const sinAcentos = nombre.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n  map[sinAcentos] = idInt;\n}\nconst aliases = {\n  'Odontologia General': 'Odontología General',\n  'Cirugia': 'Cirugía',\n  'Implantes': 'Implantología',\n  'Articulo': 'Artículos y Materiales',\n  'Artículo': 'Artículos y Materiales',\n  'Diagnostico': 'Diagnóstico',\n  'Rehabilitacion Oral': 'Rehabilitación Oral',\n  'Odontopediatria': 'Odontopediatría',\n  'Implantologia': 'Implantología',\n};\nfor (const [alias, canonical] of Object.entries(aliases)) {\n  const canonicalId = map[canonical] || map[canonical.toLowerCase()];\n  if (canonicalId !== undefined) { map[alias] = canonicalId; map[alias.toLowerCase()] = canonicalId; }\n}\nconst defaultId = map['Odontología General'] || 1;\nreturn [{ json: { specialtyMap: map, defaultSpecialtyId: defaultId, practica_id: cfg.practica_id, csv_url: cfg.csv_url, duracion: cfg.duracion_default, meses: cfg.meses_default, iva: cfg.iva_default } }];",
+        "jsCode": "const allItems = $input.all();\nconst cfg = $('⚙️ Configuración').first().json;\nconst map = {};\nfor (const item of allItems) {\n  const { id, especialidad } = item.json;\n  if (!especialidad || !id) continue;\n  const idInt = parseInt(id);\n  const nombre = especialidad.trim();\n  map[nombre] = idInt;\n  map[nombre.toLowerCase()] = idInt;\n  const sinAcentos = nombre.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n  map[sinAcentos] = idInt;\n}\nconst aliases = {\n  'Odontologia General': 'Odontología General',\n  'Cirugia': 'Cirugía',\n  'Implantes': 'Implantología',\n  'Articulo': 'Artículos y Materiales',\n  'Artículo': 'Artículos y Materiales',\n  'Diagnostico': 'Diagnóstico',\n  'Rehabilitacion Oral': 'Rehabilitación Oral',\n  'Odontopediatria': 'Odontopediatría',\n  'Implantologia': 'Implantología',\n};\nfor (const [alias, canonical] of Object.entries(aliases)) {\n  const canonicalId = map[canonical] || map[canonical.toLowerCase()];\n  if (canonicalId !== undefined) { map[alias] = canonicalId; map[alias.toLowerCase()] = canonicalId; }\n}\nconst defaultId = map['Odontología General'] || 1;\n\n// Construir la URL del CSV desde el ID del Google Sheet\nconst sheetId = cfg.google_sheet_id || '1VAFtGLJ7nAl0uBQwOCzgjjTMvNkaLAY0';\nconst csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;\n\nreturn [{ json: { specialtyMap: map, defaultSpecialtyId: defaultId, practica_id: cfg.practica_id, csv_url: csvUrl, duracion: cfg.duracion_default, meses: cfg.meses_default, iva: cfg.iva_default, google_sheet_id: sheetId } }];",
         "mode": "runOnceForAllItems"
       },
       "id": "a1b2c3d4-0005-0005-0005-000000000005",
       "name": "🗺️ Construir Mapa Especialidades",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1060, 300]
+      "position": [1140, 300]
     },
     {
       "parameters": {
@@ -72,18 +93,19 @@
       "name": "📥 Descargar CSV Google Sheets",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1280, 300]
+      "position": [1360, 300],
+      "notes": "Descarga el CSV más reciente del Google Sheet del cliente. El documento DEBE estar compartido como 'Cualquier persona con el enlace'."
     },
     {
       "parameters": {
-        "jsCode": "const httpData = $input.first().json;\nconst csvText = httpData.data || httpData.body || '';\nconst mapNode = $('🗺️ Construir Mapa Especialidades').first().json;\nconst specialtyMap = mapNode.specialtyMap;\nconst defaultId = mapNode.defaultSpecialtyId;\nconst practica_id = mapNode.practica_id;\nfunction parseCSVLine(line) {\n  const result = []; let current = ''; let inQuotes = false;\n  for (let i = 0; i < line.length; i++) {\n    const ch = line[i];\n    if (ch === '\"') { if (inQuotes && line[i+1] === '\"') { current += '\"'; i++; } else inQuotes = !inQuotes; }\n    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }\n    else current += ch;\n  }\n  result.push(current.trim()); return result;\n}\nfunction parsePrice(raw) { if (!raw) return 0; const cleaned = raw.replace(/[^0-9.]/g, ''); return parseFloat(cleaned) || 0; }\nconst lines = csvText.split(/\\r?\\n/);\nconst rawHeaders = parseCSVLine(lines[4]);\nconst headers = rawHeaders.map(h => h.trim());\nconst iEspecialidad = headers.findIndex(h => h.toLowerCase().includes('especialidad'));\nconst iDescripcion = headers.findIndex(h => h.toLowerCase().includes('descripci'));\nconst iPrecioEfec = headers.findIndex(h => h.toLowerCase().includes('precio efectivo'));\nconst items = [];\nfor (let i = 5; i < lines.length; i++) {\n  const line = lines[i]; if (!line || !line.trim()) continue;\n  const values = parseCSVLine(line);\n  const nombreServicio = (values[iDescripcion] || '').trim();\n  const unit_price = parsePrice(values[iPrecioEfec]);\n  if (!nombreServicio || unit_price <= 0) continue;\n  const espNombre = iEspecialidad >= 0 ? (values[iEspecialidad] || '').trim() : '';\n  const especialidadId = specialtyMap[espNombre] || specialtyMap[espNombre.toLowerCase()] || defaultId;\n  items.push({ json: { name: nombreServicio, unit_price, duracion: mapNode.duracion, especialidad: especialidadId, meses: mapNode.meses, costo: unit_price, iva: mapNode.iva, descuento_efectivo: 0, practica_id, eliminado: 0 } });\n}\nreturn items;",
+        "jsCode": "const httpData = $input.first().json;\nconst csvText = httpData.data || httpData.body || '';\nconst mapNode = $('🗺️ Construir Mapa Especialidades').first().json;\nconst specialtyMap = mapNode.specialtyMap;\nconst defaultId = mapNode.defaultSpecialtyId;\nconst practica_id = mapNode.practica_id;\nfunction parseCSVLine(line) {\n  const result = []; let current = ''; let inQuotes = false;\n  for (let i = 0; i < line.length; i++) {\n    const ch = line[i];\n    if (ch === '\"') { if (inQuotes && line[i+1] === '\"') { current += '\"'; i++; } else inQuotes = !inQuotes; }\n    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }\n    else current += ch;\n  }\n  result.push(current.trim()); return result;\n}\nfunction parsePrice(raw) { if (!raw) return 0; const cleaned = raw.replace(/[^0-9.]/g, ''); return parseFloat(cleaned) || 0; }\nconst lines = csvText.split(/\\r?\\n/);\nconst rawHeaders = parseCSVLine(lines[4]);\nconst headers = rawHeaders.map(h => h.trim());\nconst iEspecialidad = headers.findIndex(h => h.toLowerCase().includes('especialidad'));\nconst iDescripcion = headers.findIndex(h => h.toLowerCase().includes('descripci'));\nconst iPrecioEfec = headers.findIndex(h => h.toLowerCase().includes('precio efectivo'));\nconst items = [];\nfor (let i = 5; i < lines.length; i++) {\n  const line = lines[i]; if (!line || !line.trim()) continue;\n  const values = parseCSVLine(line);\n  const nombreServicio = (values[iDescripcion] || '').trim();\n  const unit_price = parsePrice(values[iPrecioEfec]);\n  if (!nombreServicio || unit_price <= 0) continue;\n  const espNombre = iEspecialidad >= 0 ? (values[iEspecialidad] || '').trim() : '';\n  const especialidadId = specialtyMap[espNombre] || specialtyMap[espNombre.toLowerCase()] || defaultId;\n  items.push({ json: { name: nombreServicio, unit_price, duracion: mapNode.duracion, especialidad: especialidadId, meses: mapNode.meses, costo: unit_price, iva: mapNode.iva, descuento_efectivo: 0, practica_id, eliminado: 0 } });\n}\n\nconsole.log(`[SYNC] Google Sheet ${mapNode.google_sheet_id}: ${items.length} servicios encontrados`);\nreturn items;",
         "mode": "runOnceForAllItems"
       },
       "id": "a1b2c3d4-0007-0007-0007-000000000007",
       "name": "📊 Parsear CSV + Mapear Campos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1500, 300]
+      "position": [1580, 300]
     },
     {
       "parameters": {
@@ -94,7 +116,7 @@
       "name": "💾 Insertar Servicio (IF NOT EXISTS)",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [1720, 300],
+      "position": [1800, 300],
       "credentials": { "mySql": { "id": "7KzZxdBmNl9SdLZT", "name": "MySQL MiConsulUno" } }
     },
     {
@@ -103,22 +125,23 @@
       "name": "📦 Agrupar Resultados",
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
-      "position": [1940, 300]
+      "position": [2020, 300]
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { status: '✅ Importación completada', total: ($input.first().json.data || []).length, timestamp: new Date().toLocaleString() } }];",
+        "jsCode": "const sheetId = $('⚙️ Configuración').first().json.google_sheet_id || 'desconocido';\nconst total = ($input.first().json.data || []).length;\nconst sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;\nreturn [{ json: { status: '✅ Sincronización completada', google_sheet: sheetUrl, total_servicios_procesados: total, timestamp: new Date().toLocaleString('es-MX', { timeZone: 'America/Monterrey' }), nota: 'Los servicios nuevos se insertaron. Los existentes se omitieron (sin duplicados).' } }];",
         "mode": "runOnceForAllItems"
       },
       "id": "a1b2c3d4-0010-0010-0010-000000000010",
       "name": "✅ Resumen Final",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2160, 300]
+      "position": [2240, 300]
     }
   ],
   "connections": {
     "▶️ Inicio Manual": { "main": [[{ "node": "⚙️ Configuración", "type": "main", "index": 0 }]] },
+    "⏰ Sincronización Automática (Diaria 6AM)": { "main": [[{ "node": "⚙️ Configuración", "type": "main", "index": 0 }]] },
     "⚙️ Configuración": { "main": [[{ "node": "🏷️ Crear Especialidades (15)", "type": "main", "index": 0 }]] },
     "🏷️ Crear Especialidades (15)": { "main": [[{ "node": "📋 Obtener IDs Especialidades", "type": "main", "index": 0 }]] },
     "📋 Obtener IDs Especialidades": { "main": [[{ "node": "🗺️ Construir Mapa Especialidades", "type": "main", "index": 0 }]] },
@@ -128,5 +151,17 @@
     "💾 Insertar Servicio (IF NOT EXISTS)": { "main": [[{ "node": "📦 Agrupar Resultados", "type": "main", "index": 0 }]] },
     "📦 Agrupar Resultados": { "main": [[{ "node": "✅ Resumen Final", "type": "main", "index": 0 }]] }
   },
-  "settings": { "executionOrder": "v1", "saveManualExecutions": true }
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "meta": {
+    "description": "Sincroniza automáticamente la lista de precios del cliente desde Google Sheets hacia MiConsulUno. Se ejecuta diariamente a las 6AM o manualmente. El cliente solo necesita actualizar su Google Sheet y n8n se encarga del resto.",
+    "version": "2.0.0",
+    "autor": "MiConsul + Antigravity",
+    "instrucciones_cliente": {
+      "paso_1": "Abrir su Google Sheet con la lista de precios",
+      "paso_2": "Click en 'Compartir' → 'Cualquier persona con el enlace puede ver'",
+      "paso_3": "Copiar el ID del documento (la parte larga de la URL entre /d/ y /edit)",
+      "paso_4": "Entregar ese ID al administrador para configurarlo en el nodo '⚙️ Configuración'",
+      "nota": "El cliente puede agregar, modificar o eliminar filas en su Google Sheet en cualquier momento. Los cambios se reflejarán en MiConsul en la próxima sincronización automática (6AM) o al ejecutar manualmente."
+    }
+  }
 }
