@@ -1,0 +1,615 @@
+{
+  "name": "Importar / Actualizar Pacientes MiConsul (.xlsx)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Importar Pacientes — MiConsul",
+        "formDescription": "Sube el archivo Excel (.xlsx o .csv) con los datos de los pacientes. Los pacientes existentes serán actualizados (celular + email). Los nuevos serán creados.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Archivo de Pacientes (.xlsx / .csv)",
+              "fieldType": "file",
+              "requiredField": true,
+              "acceptFileTypes": ".xlsx,.xls,.csv"
+            },
+            {
+              "fieldLabel": "ID de Práctica (practica_id)",
+              "fieldType": "number",
+              "requiredField": true,
+              "placeholder": "Ej: 1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p001",
+      "name": "📤 Formulario: Subir Archivo",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        180,
+        300
+      ],
+      "notes": "El usuario accede a la URL del form en n8n y sube el archivo .xlsx directamente desde el navegador."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c01",
+              "name": "practica_id",
+              "value": "={{ $('📤 Formulario: Subir Archivo').first().json['ID de Práctica (practica_id)'] || 1 }}",
+              "type": "number"
+            },
+            {
+              "id": "c02",
+              "name": "fila_encabezado",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "c03",
+              "name": "modo_debug",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p002",
+      "name": "⚙️ Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        620,
+        300
+      ],
+      "notes": "Ajusta practica_id según la clínica destino. modo_debug=true activa logs detallados."
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "fileFormat": "xlsx",
+        "binaryPropertyName": "Archivo_de_Pacientes___xlsx____csv_",
+        "options": {
+          "headerRow": true,
+          "includeEmptyCells": false
+        }
+      },
+      "id": "p003",
+      "name": "📊 Leer Archivo Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [
+        400,
+        300
+      ],
+      "notes": "Parsea el .xlsx en filas. Cada fila se convierte en un item de n8n. Requiere que la primera fila sean encabezados."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════\n// VALIDAR + MAPEAR COLUMNAS\n// Detecta automáticamente los nombres de columnas del Excel\n// y los mapea a los campos de ospos_people\n// ═══════════════════════════════════════════════════════\n\nconst items     = $input.all();\nconst cfg       = $('⚙️ Configuración').first().json;\nconst resultado = { validos: [], rechazados: [], total_filas: items.length };\n\n// ── Mapa de alias bilingue ES+EN (detecta variaciones de nombres de columna) ──────────────\nconst ALIAS = {\n  first_name:   ['nombre','primer_nombre','nombres','paciente','nombre_paciente','nombre_del_paciente',\n                 'first_name','firstname','first','name','given_name','forename','patient_name','patient'],\n  last_name:    ['apellido','apellido_paterno','apellidop','primer_apellido','ap_paterno','paterno',\n                 'last_name','lastname','last','surname','family_name','second_name'],\n  last_name2:   ['apellido_materno','apellidom','segundo_apellido','ap_materno','materno',\n                 'last_name2','last_name_2','middle_name','second_last_name','mothers_last_name','maternal_surname'],\n  email:        ['email','correo','correo_electronico','e-mail','mail','correo_del_paciente',\n                 'email_address','electronic_mail'],\n  phone_number: ['telefono','telefono_fijo','fijo','tel','tel_casa','num_telefono','numero_telefono','telefono1',\n                 'phone','phone_number','telephone','landline','home_phone','work_phone','phone_1','tel_number'],\n  celular:      ['celular','cel','movil','telefono_movil','tel_celular','celularwhatsapp','whatsapp','num_celular','telefono2',\n                 'mobile','cell','cell_phone','cellphone','mobile_phone','mobile_number','cell_number','phone_2','whatsapp_number'],\n  nacimiento:   ['nacimiento','fecha_nacimiento','fecha_nac','f_nacimiento','cumpleanos','fecnac','fecha_de_nacimiento',\n                 'birthdate','birth_date','date_of_birth','dob','birthday','born','fecha_nac_'],\n  genero:       ['genero','sexo','sexo_biologico','genero_biologico',\n                 'gender','sex','biological_sex'],\n  address_1:    ['direccion','calle','domicilio','calle_numero','calle_y_numero','domicilio_calle',\n                 'address','address_1','street','street_address','address_line_1','address1','street_name'],\n  address_2:    ['colonia','colonia_fracc','fraccionamiento','barrio','colonia_barrio',\n                 'address_2','neighborhood','suburb','district','address_line_2','address2','locality'],\n  city:         ['ciudad','municipio','delegacion','alcaldia','ciudad_municipio',\n                 'city','town','municipality','borough'],\n  state:        ['estado','entidad','entidad_federativa',\n                 'state','province','region','state_province'],\n  zip:          ['cp','codigo_postal','c_p','cod_postal','num_cp',\n                 'zip','zip_code','postal_code','postcode','zip_postal'],\n  comments:     ['comentarios','notas','observaciones','nota','comentario',\n                 'comments','notes','remarks','observations','note','description']\n};\n\n// ── Helper: encontrar valor por alias ─────────────────────────────────────────\nfunction findVal(row, campo) {\n  const aliases = ALIAS[campo] || [];\n  for (const key of Object.keys(row)) {\n    const keyNorm = key.toLowerCase().trim()\n      .replace(/\\s+/g,'_')\n      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');\n    if (aliases.includes(keyNorm)) {\n      return String(row[key] || '').trim();\n    }\n  }\n  return '';\n}\n\n// ── Helper: limpiar teléfono → solo dígitos ──────────────────────────────────\nfunction cleanPhone(raw) {\n  if (!raw) return '';\n  const digits = String(raw).replace(/\\D/g,'');\n  if (digits.length === 10) return digits;\n  if (digits.length >= 12 && digits.startsWith('52')) return digits.slice(2, 12);\n  return digits.slice(0, 15); // max 15 dígitos\n}\n\n// ── Helper: escapar SQL (previene inyección básica) ──────────────────────────\nfunction esc(str) {\n  return String(str || '').replace(/'/g,\"''\").replace(/\\\\/g,'\\\\\\\\').trim();\n}\n\n// ── Helper: normalizar fecha YYYY-MM-DD ──────────────────────────────────────\nfunction cleanDate(raw) {\n  if (!raw) return null;\n  const s = String(raw).trim();\n  // Formatos: DD/MM/YYYY, DD-MM-YYYY, MM/DD/YYYY, YYYY-MM-DD\n  const patterns = [\n    { re: /^(\\d{4})-(\\d{2})-(\\d{2})$/,       fmt: (m) => `${m[1]}-${m[2]}-${m[3]}` },\n    { re: /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/,       fmt: (m) => `${m[3]}-${m[2]}-${m[1]}` },\n    { re: /^(\\d{2})-(\\d{2})-(\\d{4})$/,         fmt: (m) => `${m[3]}-${m[2]}-${m[1]}` },\n    { re: /^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/,   fmt: (m) => `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` },\n  ];\n  for (const p of patterns) {\n    const m = s.match(p.re);\n    if (m) return p.fmt(m);\n  }\n  return null;\n}\n\n// ── Helper: normalizar género ─────────────────────────────────────────────────\nfunction cleanGenero(raw) {\n  if (!raw) return 'masculino';\n  const s = raw.toLowerCase().trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');\n  if (['f','femenino','mujer','female','fem','w','woman','girl','she','women','feminin'].includes(s)) return 'femenino';\n  if (['m','masculino','hombre','male','man','boy','he','h','masc','masculine'].includes(s)) return 'masculino';\n  return 'masculino';\n}\n\n// ── Procesar cada fila ────────────────────────────────────────────────────────\nfor (const item of items) {\n  const row = item.json;\n\n  // Skip filas vacías\n  const firstVal = Object.values(row)[0];\n  if (!firstVal || String(firstVal).trim() === '') continue;\n\n  const first_name = esc(findVal(row, 'first_name').toUpperCase());\n  const last_name  = esc(findVal(row, 'last_name').toUpperCase());\n  const last_name2 = esc(findVal(row, 'last_name2').toUpperCase());\n  const email      = esc(findVal(row, 'email').toLowerCase());\n  const phone_raw  = findVal(row, 'phone_number');\n  const celular_raw= findVal(row, 'celular');\n  const phone_number = cleanPhone(phone_raw);\n  const celular      = cleanPhone(celular_raw);\n  const nacimiento   = cleanDate(findVal(row, 'nacimiento'));\n  const genero       = cleanGenero(findVal(row, 'genero'));\n  const address_1    = esc(findVal(row, 'address_1'));\n  const address_2    = esc(findVal(row, 'address_2'));\n  const city         = esc(findVal(row, 'city'));\n  const state        = esc(findVal(row, 'state'));\n  const zip          = cleanPhone(findVal(row, 'zip')); // solo dígitos\n  const comments     = esc(findVal(row, 'comments'));\n\n  // ── Validaciones requeridas ──────────────────────────────────────────────\n  const errores = [];\n  if (!first_name) errores.push('Nombre vacío');\n  if (!last_name)  errores.push('Apellido paterno vacío');\n  if (!phone_number && !celular) errores.push('Sin teléfono ni celular');\n  if (email && !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)) errores.push(`Email inválido: ${email}`);\n\n  const paciente = {\n    practica_id:  cfg.practica_id,\n    first_name,\n    last_name,\n    last_name2,\n    email,\n    phone_number,\n    celular,\n    nacimiento,\n    genero,\n    address_1,\n    address_2,\n    city,\n    state,\n    zip,\n    country:   'México',\n    comments\n  };\n\n  if (errores.length > 0) {\n    resultado.rechazados.push({ ...paciente, errores: errores.join(' | '), _raw: JSON.stringify(row) });\n    console.warn('[IMPORT RECHAZADO]', first_name, last_name, '→', errores.join(', '));\n  } else {\n    resultado.validos.push({ json: paciente });\n  }\n}\n\nconsole.log(`[IMPORT] Total filas: ${resultado.total_filas} | Válidos: ${resultado.validos.length} | Rechazados: ${resultado.rechazados.length}`);\n\nif (resultado.rechazados.length > 0) {\n  console.warn('[IMPORT RECHAZADOS]', JSON.stringify(resultado.rechazados.map(r => ({ nombre: `${r.first_name} ${r.last_name}`, errores: r.errores }))));\n}\n\n// Si no hay válidos, retornar señal de vacío\nif (resultado.validos.length === 0) {\n  return [{ json: { _import_vacio: true, total_rechazados: resultado.rechazados.length, mensaje: 'No hay registros válidos para importar' } }];\n}\n\nreturn resultado.validos;",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "p004",
+      "name": "✅ Validar + Mapear Columnas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        300
+      ],
+      "notes": "Detecta automáticamente las columnas del Excel. Normaliza: nombres en MAYÚSCULAS, teléfonos a 10 dígitos, fechas a YYYY-MM-DD. Filtra filas inválidas."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._import_vacio }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "p005",
+      "name": "🚦 ¿Hay datos válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        300
+      ],
+      "notes": "Si el archivo no tiene datos válidos, termina con error. Si hay datos, continúa el proceso."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT\n  COALESCE(\n    (\n      SELECT person_id\n      FROM ospos_people\n      WHERE practica_id = '{{$json.practica_id}}'\n        AND (\n          (email != '' AND LOWER(TRIM(email)) = '{{$json.email}}')\n          OR (\n            UPPER(TRIM(first_name))  = '{{$json.first_name}}'\n            AND UPPER(TRIM(last_name)) = '{{$json.last_name}}'\n            AND (\n              phone_number = '{{$json.phone_number}}'\n              OR celular    = '{{$json.celular}}'\n            )\n          )\n        )\n      ORDER BY person_id DESC\n      LIMIT 1\n    ), 0\n  ) AS person_id_encontrado,\n  '{{$json.first_name}}'   AS _fn,\n  '{{$json.last_name}}'    AS _ln,\n  '{{$json.last_name2}}'   AS _ln2,\n  '{{$json.email}}'        AS _email,\n  '{{$json.phone_number}}' AS _phone,\n  '{{$json.celular}}'      AS _celular,\n  '{{$json.nacimiento}}'   AS _nacimiento,\n  '{{$json.genero}}'       AS _genero,\n  '{{$json.address_1}}'    AS _address1,\n  '{{$json.address_2}}'    AS _address2,\n  '{{$json.city}}'         AS _city,\n  '{{$json.state}}'        AS _state,\n  '{{$json.zip}}'          AS _zip,\n  '{{$json.comments}}'     AS _comments,\n  {{$json.practica_id}}    AS _practica_id",
+        "options": {}
+      },
+      "id": "p007",
+      "name": "🔍 Buscar Paciente en BD",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1280,
+        440
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7KzZxdBmNl9SdLZT",
+          "name": "MySQL MiConsulUno"
+        }
+      },
+      "notes": "Busca por EMAIL o por NOMBRE+APELLIDO+TELÉFONO. Siempre retorna 1 fila: person_id_encontrado=0 si no existe, o el ID real si ya existe. También pasa todos los datos del paciente como columnas _* para el siguiente nodo."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.person_id_encontrado }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "p008",
+      "name": "🔀 ¿Ya Existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        440
+      ],
+      "notes": "TRUE → paciente existe → UPDATE celular y email. FALSE → paciente nuevo → INSERT en ambas tablas."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE ospos_people SET\n  celular      = IF('{{$json._celular}}' != '', '{{$json._celular}}', celular),\n  email        = IF('{{$json._email}}'   != '', '{{$json._email}}',   email),\n  phone_number = IF('{{$json._phone}}'   != '', '{{$json._phone}}',   phone_number),\n  last_name2   = IF('{{$json._ln2}}'     != '', '{{$json._ln2}}',     last_name2),\n  nacimiento   = IF('{{$json._nacimiento}}' != 'null' AND '{{$json._nacimiento}}' != '', '{{$json._nacimiento}}', nacimiento)\nWHERE person_id = {{$json.person_id_encontrado}}\n  AND practica_id = {{$json._practica_id}};",
+        "options": {}
+      },
+      "id": "p009",
+      "name": "🔄 UPDATE: ospos_people",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1740,
+        280
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7KzZxdBmNl9SdLZT",
+          "name": "MySQL MiConsulUno"
+        }
+      },
+      "notes": "Actualiza SOLO si el valor del archivo NO está vacío (no sobreescribe datos existentes con vacío). Prioridad de actualización: celular > email > phone > last_name2 > nacimiento."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE ospos_expedientes SET\n  celular  = IF('{{$json._celular}}' != '', '{{$json._celular}}', celular),\n  email    = IF('{{$json._email}}'   != '', '{{$json._email}}',   email),\n  telefono = IF('{{$json._phone}}'   != '', '{{$json._phone}}',   telefono)\nWHERE id = {{$json.person_id_encontrado}}\n  AND practica_id = {{$json._practica_id}};",
+        "options": {}
+      },
+      "id": "p010",
+      "name": "🔄 UPDATE: ospos_expedientes",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1740,
+        420
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7KzZxdBmNl9SdLZT",
+          "name": "MySQL MiConsulUno"
+        }
+      },
+      "notes": "Sincroniza celular y email también en el expediente clínico (tabla espejo)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Referenciamos el nodo de búsqueda porque el UPDATE de MySQL solo devuelve {affectedRows}\nconst d = $('🔍 Buscar Paciente en BD').item.json;\nreturn [{ json: {\n  person_id:    d.person_id_encontrado,\n  accion:       'UPDATE',\n  paciente:     `${d._fn} ${d._ln} ${d._ln2}`.trim(),\n  email:        d._email,\n  celular:      d._celular,\n  phone:        d._phone\n}}];",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "p011",
+      "name": "📝 Log: Actualizado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO ospos_people\n  (practica_id, first_name, last_name, last_name2, email, phone_number, celular, nacimiento, genero, address_1, address_2, city, state, zip, country, comments)\nVALUES (\n  {{$json._practica_id}},\n  '{{$json._fn}}',\n  '{{$json._ln}}',\n  '{{$json._ln2}}',\n  '{{$json._email}}',\n  '{{$json._phone}}',\n  '{{$json._celular}}',\n  {{ $json._nacimiento && $json._nacimiento !== 'null' ? \"'\" + $json._nacimiento + \"'\" : 'NULL' }},\n  '{{$json._genero}}',\n  '{{$json._address1}}',\n  '{{$json._address2}}',\n  '{{$json._city}}',\n  '{{$json._state}}',\n  '{{$json._zip}}',\n  'México',\n  '{{$json._comments}}'\n);",
+        "options": {}
+      },
+      "id": "p012",
+      "name": "➕ INSERT: ospos_people",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1740,
+        600
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7KzZxdBmNl9SdLZT",
+          "name": "MySQL MiConsulUno"
+        }
+      },
+      "notes": "Inserta el nuevo paciente. El person_id es auto-increment."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT MAX(person_id) AS nuevo_id\nFROM ospos_people\nWHERE practica_id = {{$('🔍 Buscar Paciente en BD').item.json._practica_id}}\n  AND UPPER(first_name) = '{{$('🔍 Buscar Paciente en BD').item.json._fn}}'\n  AND UPPER(last_name)  = '{{$('🔍 Buscar Paciente en BD').item.json._ln}}'\n  AND (phone_number = '{{$('🔍 Buscar Paciente en BD').item.json._phone}}' OR celular = '{{$('🔍 Buscar Paciente en BD').item.json._celular}}')\nLIMIT 1;",
+        "options": {}
+      },
+      "id": "p013",
+      "name": "🆔 Obtener Nuevo person_id",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1980,
+        600
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7KzZxdBmNl9SdLZT",
+          "name": "MySQL MiConsulUno"
+        }
+      },
+      "notes": "Recupera el person_id recién generado para usarlo en el INSERT del expediente."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combina el nuevo person_id con los datos del paciente del nodo de búsqueda\nconst idRow   = $input.first().json;\nconst origen  = $('🔍 Buscar Paciente en BD').item.json;\n\nconst nuevoId = idRow.nuevo_id;\nif (!nuevoId) return [{ json: { _error: 'No se obtuvo person_id', origen } }];\n\nreturn [{ json: {\n  nuevo_id:   nuevoId,\n  practica_id: origen._practica_id,\n  nombre:      origen._fn,\n  apellidop:   origen._ln,\n  apellidom:   origen._ln2,\n  email:       origen._email,\n  telefono:    origen._phone,\n  celular:     origen._celular,\n  nacimiento:  origen._nacimiento,\n  genero:      origen._genero,\n  direccion:   origen._address1,\n  colonia:     origen._address2,\n  municipio:   origen._city,\n  estado:      origen._state,\n  cp:          origen._zip || 0\n}}];",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "p014",
+      "name": "🔗 Preparar Datos Expediente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        600
+      ],
+      "notes": "Construye el objeto completo para el INSERT en ospos_expedientes usando el nuevo person_id."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO ospos_expedientes\n  (id, practica_id, nombre, apellidop, apellidom, email, telefono, celular, nacimiento, genero, direccion, colonia, municipio, estado, cp, fecha, estatus)\nVALUES (\n  {{$json.nuevo_id}},\n  {{$json.practica_id}},\n  '{{$json.nombre}}',\n  '{{$json.apellidop}}',\n  '{{$json.apellidom}}',\n  '{{$json.email}}',\n  '{{$json.telefono}}',\n  '{{$json.celular}}',\n  {{ $json.nacimiento && $json.nacimiento !== 'null' ? \"'\" + $json.nacimiento + \"'\" : 'NULL' }},\n  '{{$json.genero}}',\n  '{{$json.direccion}}',\n  '{{$json.colonia}}',\n  '{{$json.municipio}}',\n  '{{$json.estado}}',\n  {{parseInt($json.cp) || 0}},\n  NOW(),\n  1\n)\nON DUPLICATE KEY UPDATE\n  celular  = IF('{{$json.celular}}' != '', '{{$json.celular}}', celular),\n  email    = IF('{{$json.email}}'   != '', '{{$json.email}}',   email),\n  telefono = IF('{{$json.telefono}}' != '', '{{$json.telefono}}', telefono);",
+        "options": {}
+      },
+      "id": "p015",
+      "name": "➕ INSERT: ospos_expedientes",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2420,
+        600
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7KzZxdBmNl9SdLZT",
+          "name": "MySQL MiConsulUno"
+        }
+      },
+      "notes": "Crea el expediente clínico base. ON DUPLICATE KEY como protección extra."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d    = $('🔍 Buscar Paciente en BD').item.json;\nconst newId = $('🆔 Obtener Nuevo person_id').item?.json?.nuevo_id;\nreturn [{ json: {\n  person_id: newId,\n  accion:    'INSERT',\n  paciente:  `${d._fn} ${d._ln} ${d._ln2}`.trim(),\n  email:     d._email,\n  celular:   d._celular,\n  phone:     d._phone\n}}];",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "p016",
+      "name": "📝 Log: Insertado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "p017",
+      "name": "🔗 Unir Resultados",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2860,
+        440
+      ],
+      "notes": "Combina los resultados de los dos caminos (UPDATE e INSERT) para el reporte final."
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData"
+      },
+      "id": "p018",
+      "name": "📦 Agrupar Todo",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3080,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Reporte Final de Importación ────────────────────────────────────\nconst todosLosItems = $input.first().json.data || [];\n\nconst actualizados = todosLosItems.filter(i => i.accion === 'UPDATE');\nconst insertados   = todosLosItems.filter(i => i.accion === 'INSERT');\nconst errores      = todosLosItems.filter(i => i._error);\n\nconst resumen = {\n  status:          '✅ Importación completada',\n  timestamp:       new Date().toLocaleString('es-MX', { timeZone: 'America/Monterrey' }),\n  total_procesados: todosLosItems.length,\n  insertados_nuevos: insertados.length,\n  actualizados:    actualizados.length,\n  errores:         errores.length,\n  detalle_insertados: insertados.map(i => ({ id: i.person_id, nombre: i.paciente, email: i.email, celular: i.celular })),\n  detalle_actualizados: actualizados.map(i => ({ id: i.person_id, nombre: i.paciente, email: i.email, celular: i.celular })),\n  detalle_errores: errores.map(i => ({ paciente: i.paciente, error: i._error }))\n};\n\nconsole.log('[IMPORT FINALIZADO]', JSON.stringify({\n  insertados: resumen.insertados_nuevos,\n  actualizados: resumen.actualizados,\n  errores: resumen.errores\n}));\n\nreturn [{ json: resumen }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "p019",
+      "name": "📋 Reporte Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        440
+      ],
+      "notes": "Genera el reporte con totales: nuevos insertados, actualizados y errores."
+    }
+  ],
+  "connections": {
+    "📤 Formulario: Subir Archivo": {
+      "main": [
+        [
+          {
+            "node": "📊 Leer Archivo Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Configuración": {
+      "main": [
+        [
+          {
+            "node": "✅ Validar + Mapear Columnas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Leer Archivo Excel": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Validar + Mapear Columnas": {
+      "main": [
+        [
+          {
+            "node": "🚦 ¿Hay datos válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚦 ¿Hay datos válidos?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "🔍 Buscar Paciente en BD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Buscar Paciente en BD": {
+      "main": [
+        [
+          {
+            "node": "🔀 ¿Ya Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 ¿Ya Existe?": {
+      "main": [
+        [
+          {
+            "node": "🔄 UPDATE: ospos_people",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "➕ INSERT: ospos_people",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 UPDATE: ospos_people": {
+      "main": [
+        [
+          {
+            "node": "🔄 UPDATE: ospos_expedientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 UPDATE: ospos_expedientes": {
+      "main": [
+        [
+          {
+            "node": "📝 Log: Actualizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Log: Actualizado": {
+      "main": [
+        [
+          {
+            "node": "🔗 Unir Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ INSERT: ospos_people": {
+      "main": [
+        [
+          {
+            "node": "🆔 Obtener Nuevo person_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🆔 Obtener Nuevo person_id": {
+      "main": [
+        [
+          {
+            "node": "🔗 Preparar Datos Expediente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔗 Preparar Datos Expediente": {
+      "main": [
+        [
+          {
+            "node": "➕ INSERT: ospos_expedientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ INSERT: ospos_expedientes": {
+      "main": [
+        [
+          {
+            "node": "📝 Log: Insertado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Log: Insertado": {
+      "main": [
+        [
+          {
+            "node": "🔗 Unir Resultados",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "🔗 Unir Resultados": {
+      "main": [
+        [
+          {
+            "node": "📦 Agrupar Todo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Agrupar Todo": {
+      "main": [
+        [
+          {
+            "node": "📋 Reporte Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Reporte Final": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "description": "Importa pacientes desde un archivo .xlsx. Detecta si el paciente ya existe (por email o nombre+teléfono). Si existe: actualiza celular y email. Si no existe: lo crea en ospos_people y ospos_expedientes. El usuario sube el archivo desde un formulario web de n8n.",
+    "version": "1.0.0",
+    "author": "MiConsul + Claude Code",
+    "columnas_esperadas": {
+      "requeridas": [
+        "nombre (o first_name)",
+        "apellido_paterno (o last_name)",
+        "telefono O celular"
+      ],
+      "opcionales": [
+        "apellido_materno",
+        "email",
+        "celular (WhatsApp)",
+        "fecha_nacimiento",
+        "genero",
+        "direccion",
+        "colonia",
+        "ciudad",
+        "estado",
+        "cp",
+        "comentarios"
+      ],
+      "detecta_automaticamente": true,
+      "nota": "Los nombres de columna son flexibles. Acepta variaciones en español e inglés."
+    }
+  }
+}
